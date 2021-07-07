@@ -1,0 +1,13 @@
+cnudie-transport-tool:
+  base_definition:
+    traits:
+      component_descriptor: ~
+      version: ~
+      notifications:
+        default:
+          on_error:
+            recipients:
+            - email_addresses:
+              - johannes.schicktanz@sap.com
+              - enrico.kaack@sap.com
+            - committers
