@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2021 SAP SE or an SAP affiliate company and Gardener contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+set -e
+
+repo_dir="$(readlink -f "$(dirname "$0")/..")"
+cd $repo_dir
+
+if [[ ! -z ${EFFECTIVE_VERSION} ]]; then
+    echo "overwriting VERSION file with \$EFFECTIVE_VERSION = ${EFFECTIVE_VERSION}"
+    echo -n "${EFFECTIVE_VERSION}" > "$repo_dir/VERSION"
+fi
+
+pip3 install --upgrade pip wheel setuptools
+python3 "setup.py" sdist bdist_wheel
+
+publish=${PUBLISH:-false}
+if $publish = true; then
+    echo "\$PUBLISH == true -> publish package to pypi"
+
+    model_element_cmd="cli.py config model_element --cfg-type pypi --cfg-name gardener"
+
+    username="$(${model_element_cmd} --key credentials.username)"
+    passwd="$(${model_element_cmd} --key credentials.passwd)"
+
+    set -x
+    pip3 install --upgrade twine
+
+    # upload to pypi
+    twine upload --user "${username}" --password "${passwd}" dist/*
+else
+    echo "\$PUBLISH != true -> will not publish package to pypi"
+fi

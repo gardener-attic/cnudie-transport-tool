@@ -1,0 +1,207 @@
+# SPDX-FileCopyrightText: 2021 SAP SE or an SAP affiliate company and Gardener contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+import dataclasses
+
+import ci.util
+import gci.componentmodel as cm
+
+import ctt.processing_model as pm
+
+
+class IdentityUploader:
+    def process(self, processing_job, target_as_source=False):
+        upload_request = processing_job.upload_request
+        if not target_as_source:
+            upload_request = dataclasses.replace(
+                processing_job.upload_request,
+                target_ref=processing_job.upload_request.source_ref,
+            )
+        return dataclasses.replace(
+            processing_job,
+            upload_request=upload_request,
+        )
+
+
+def labels_with_migration_hint(
+    resource: cm.Resource,
+    src_img_ref,
+):
+    src_labels = resource.labels or []
+    label_name = 'cloud.gardener.cnudie/migration/original_ref'
+    src_labels = [label for label in src_labels if label.name != label_name]
+    return src_labels + [
+        cm.Label(
+            name=label_name,
+            value=src_img_ref,
+        ),
+    ]
+
+
+class PrefixUploader:
+    def __init__(
+        self,
+        prefix,
+        mangle=True,
+        convert_to_relative_refs=False,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+
+        self._prefix = prefix
+        self._mangle = mangle
+        self._convert_to_relative_refs = convert_to_relative_refs
+
+    def process(
+        self,
+        processing_job: pm.ProcessingJob,
+        target_as_source=False,
+    ):
+        if processing_job.resource.access.type is not cm.AccessType.OCI_REGISTRY:
+            raise RuntimeError('PrefixUploader only supports access type == ociRegistry')
+
+        if not target_as_source:
+            resource = processing_job.resource
+            src_name, src_tag = resource.access.imageReference.rsplit(':', 1)
+        else:
+            src_name, src_tag = processing_job.upload_request.target_ref.rsplit(':', 2)
+
+        if self._mangle:
+            artifact_path = ':'.join([src_name.replace('.', '_'), src_tag])
+        else:
+            artifact_path = ':'.join((src_name, src_tag))
+
+        tgt_ref = ci.util.urljoin(self._prefix, artifact_path)
+
+        upload_request = dataclasses.replace(
+            processing_job.upload_request,
+            source_ref=resource.access.imageReference,
+            target_ref=tgt_ref,
+        )
+
+        if self._convert_to_relative_refs:
+            # remove host from target ref
+            # don't use artifact_path as self._prefix can also contain path elements
+            relative_artifact_path = '/'.join(tgt_ref.split("/")[1:])
+            access = cm.RelativeOciAccess(
+                cm.AccessType.RELATIVE_OCI_REFERENCE,
+                reference=relative_artifact_path
+            )
+        else:
+            access = cm.OciAccess(
+                cm.AccessType.OCI_REGISTRY,
+                imageReference=tgt_ref,
+            )
+
+        # propagate changed resource
+        processing_job.processed_resource = dataclasses.replace(
+            processing_job.resource,
+            access=access,
+            labels=labels_with_migration_hint(
+                resource=processing_job.resource,
+                src_img_ref=resource.access.imageReference,
+            ),
+        )
+
+        return dataclasses.replace(
+            processing_job,
+            upload_request=upload_request
+        )
+
+
+class TagSuffixUploader:
+    def __init__(
+        self,
+        suffix,
+        separator='-',
+    ):
+        self._suffix = suffix
+        self._separator = separator
+
+    def process(self, processing_job, target_as_source=False):
+        if processing_job.resource.type is not cm.ResourceType.OCI_IMAGE:
+            raise NotImplementedError
+
+        if not target_as_source:
+            src_name, src_tag = processing_job.resource.access.imageReference.rsplit(':', 1)
+        else:
+            src_name, src_tag = processing_job.upload_request.target_ref.rsplit(':', 2)
+
+        tgt_tag = self._separator.join((src_tag, self._suffix))
+        tgt_ref = ':'.join((src_name, tgt_tag))
+
+        upload_request = dataclasses.replace(
+            processing_job.upload_request,
+            source_ref=processing_job.resource.access.imageReference,
+            target_ref=tgt_ref,
+        )
+
+        # propagate changed resource
+        processing_job.processed_resource = dataclasses.replace(
+            processing_job.resource,
+            access=cm.OciAccess(
+                cm.AccessType.OCI_REGISTRY,
+                imageReference=tgt_ref,
+            ),
+            labels=labels_with_migration_hint(
+                resource=processing_job.resource,
+                src_img_ref=processing_job.resource.access.imageReference,
+            ),
+        )
+
+        return dataclasses.replace(
+            processing_job,
+            upload_request=upload_request
+        )
+
+
+class RBSCCustomerFacingRepoLoader:
+    def __init__(
+        self,
+        src_ctx_repo_url,
+        tgt_ctx_repo_url,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+
+        self._src_ctx_repo_url = src_ctx_repo_url
+        self._tgt_ctx_repo_url = tgt_ctx_repo_url
+
+    def process(
+        self,
+        processing_job: pm.ProcessingJob,
+        target_as_source=False,
+    ):
+        resource = processing_job.resource
+
+        if processing_job.resource.access.type is not cm.AccessType.RELATIVE_OCI_REFERENCE:
+            raise RuntimeError('RBSCCustomerFacingRepoLoader only support access type == relativeOciReference')
+
+        relative_src_ref = resource.access.reference
+        src_ref = ci.util.urljoin(self._src_ctx_repo_url, relative_src_ref)
+        tgt_ref = ci.util.urljoin(self._tgt_ctx_repo_url, relative_src_ref)
+
+        upload_request = dataclasses.replace(
+            processing_job.upload_request,
+            source_ref=src_ref,
+            target_ref=tgt_ref,
+        )
+
+        # propagate changed resource
+        processing_job.processed_resource = dataclasses.replace(
+            processing_job.resource,
+            access=cm.OciAccess(
+                cm.AccessType.OCI_REGISTRY,
+                imageReference=tgt_ref,
+            ),
+            labels=labels_with_migration_hint(
+                resource=processing_job.resource,
+                src_img_ref=src_ref,
+            ),
+        )
+
+        return dataclasses.replace(
+            processing_job,
+            upload_request=upload_request
+        )

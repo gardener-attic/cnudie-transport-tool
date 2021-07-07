@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2021 SAP SE or an SAP affiliate company and Gardener contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+import sys
+
+import ccc.concourse
+import ci.util
+import cnudie.util
+import concourse.steps.component_descriptor_util as cdu
+import gci.componentmodel as cm
+import product.v2
+
+
+def parse_component_descriptor():
+    descriptor_path = cdu.component_descriptor_path(
+        cm.SchemaVersion.V2,
+    )
+    return cm.ComponentDescriptor.from_dict(
+        ci.util.parse_yaml_file(descriptor_path),
+    )
+
+
+def retrieve_latest_released_descriptor(
+    current_descriptor: cm.ComponentDescriptor,
+):
+    current_component = current_descriptor.component
+    ctx_repo_base_url = current_component.current_repository_ctx().baseUrl
+
+    greatest_version = product.v2.latest_component_version(
+      component_name=current_component.name,
+      ctx_repo_base_url=ctx_repo_base_url,
+    )
+
+    return product.v2.download_component_descriptor_v2(
+      component_name=current_component.name,
+      component_version=greatest_version,
+      ctx_repo_base_url=ctx_repo_base_url,
+    )
+
+
+def trigger_release_job():
+    concourse_client = ccc.concourse.client_from_env()
+
+    ci.util.info('triggering release job {jn}'.format(jn=ci.util.check_env('RELEASE_JOB_NAME')))
+    concourse_client.trigger_build(
+        pipeline_name=ci.util.check_env('PIPELINE_NAME'),
+        job_name=ci.util.check_env('RELEASE_JOB_NAME'),
+    )
+
+
+current_descriptor = parse_component_descriptor()
+latest_descriptor = retrieve_latest_released_descriptor(
+    current_descriptor=current_descriptor,
+)
+
+component_diff = cnudie.util.diff_component_descriptors(
+    left_component=latest_descriptor,
+    right_component=current_descriptor,
+    ignore_component_names=(ci.util.check_env('COMPONENT_NAME'),),
+)
+
+if not component_diff:
+    ci.util.info('no diffs were found between current and latest release')
+    sys.exit(0)
+
+ci.util.info('diffs were found since last released ctt version')
+
+for left_c, right_c in component_diff.cpairs_version_changed:
+    ci.util.info('{cn}: released: {leftv}, current: {rightv}'.format(
+        cn=left_c.name,
+        leftv=left_c.version,
+        rightv=right_c.version,
+        )
+    )
+
+trigger_release_job()
