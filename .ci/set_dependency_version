@@ -36,9 +36,10 @@ def update_cc_utils_dependency(cc_utils_cd: cm.ComponentDescriptor):
     with open(dockerfile, 'r+') as f:
         content = f.read()
         content = re.sub(
-            pattern=r'(^FROM)[\s]+(eu.gcr.io/gardener-project/cc/job-image[^\r\n]*)',
+            pattern=r'(^FROM)[\s]+([^\r\n]*)',
             repl=f'\\1 {image_reference}',
             string=content,
+            flags=re.MULTILINE,
         )
         f.seek(0)
         f.write(content)
