@@ -15,7 +15,8 @@ class IdentityUploader:
     def process(self, processing_job, target_as_source=False):
         upload_request = processing_job.upload_request
 
-        if '@' in upload_request.source_ref:
+        _, _, src_tag = oci.client._split_image_reference(upload_request.source_ref)
+        if ':' in src_tag:
             raise NotImplementedError
 
         if not target_as_source:

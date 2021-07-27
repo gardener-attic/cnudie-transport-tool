@@ -269,6 +269,7 @@ def create_jobs(
             )
 
 
+# uploads a single OCI artifact and returns the content digest
 def process_upload_request(
     upload_request: processing_model.ContainerImageUploadRequest,
     upload_mode_images=product.v2.UploadMode.SKIP
@@ -307,7 +308,7 @@ def replace_tag_with_digest(image_reference: str, docker_content_digest: str) ->
     return f'{src_name}@{docker_content_digest}'
 
 
-def use_digest_access(res: cm.Resource, docker_content_digest: str) -> cm.Resource:
+def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> cm.Resource:
     if res.access.type is cm.AccessType.OCI_REGISTRY:
         digest_ref = replace_tag_with_digest(res.access.imageReference, docker_content_digest)
         digest_access = cm.OciAccess(
@@ -382,9 +383,9 @@ def process_images(
                 )
 
                 if processing_job.processed_resource:
-                    processing_job.processed_resource = use_digest_access(processing_job.processed_resource, docker_content_digest)
+                    processing_job.processed_resource = access_resource_via_digest(processing_job.processed_resource, docker_content_digest)
                 else:
-                    processing_job.resource = use_digest_access(processing_job.resource, docker_content_digest)
+                    processing_job.resource = access_resource_via_digest(processing_job.resource, docker_content_digest)
 
             bom_resources.append(
                 BOMEntry(
