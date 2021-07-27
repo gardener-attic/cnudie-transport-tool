@@ -15,7 +15,6 @@ import typing
 
 import yaml
 
-import ccc.oci
 import ci.util
 import cnudie.replicate
 import cnudie.retrieve
@@ -269,65 +268,25 @@ def create_jobs(
             )
 
 
-# uploads a single OCI artifact and returns the content digest
-def process_upload_request(
-    upload_request: processing_model.ContainerImageUploadRequest,
-    upload_mode_images=product.v2.UploadMode.SKIP
-) -> str:
+def process_upload_request(upload_request: processing_model.ContainerImageUploadRequest,
+                           upload_mode_images=product.v2.UploadMode.SKIP
+                           ):
     tgt_ref = upload_request.target_ref
 
-    oci_client = ccc.oci.oci_client()
-    manifest_blob_ref = oci_client.head_manifest(image_reference=tgt_ref, absent_ok=True)
-    if bool(manifest_blob_ref) and upload_mode_images is product.v2.UploadMode.SKIP:
-        logger.info(f'{tgt_ref=} exists - skipping processing')
-        return manifest_blob_ref.digest
+    if container.util.image_exists(tgt_ref) and upload_mode_images is product.v2.UploadMode.SKIP:
+        return logger.info(f'{tgt_ref=} exists - skipping processing')
 
     src_ref = upload_request.source_ref
 
     logger.info(f'start processing {src_ref} -> {tgt_ref=}')
 
-    res = container.util.filter_image(
+    container.util.filter_image(
         source_ref=src_ref,
         target_ref=tgt_ref,
         remove_files=upload_request.remove_files,
     )
 
     logger.info(f'finished processing {src_ref} -> {tgt_ref=}')
-
-    docker_content_digest = res.headers.get('Docker-Content-Digest', None)
-    return docker_content_digest
-
-
-def replace_tag_with_digest(image_reference: str, docker_content_digest: str) -> str:
-    last_part = image_reference.split('/')[-1]
-    if '@' in last_part:
-        src_name, _ = image_reference.rsplit('@', 1)
-    else:
-        src_name, _ = image_reference.rsplit(':', 1)
-
-    return f'{src_name}@{docker_content_digest}'
-
-
-def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> cm.Resource:
-    if res.access.type is cm.AccessType.OCI_REGISTRY:
-        digest_ref = replace_tag_with_digest(res.access.imageReference, docker_content_digest)
-        digest_access = cm.OciAccess(
-            cm.AccessType.OCI_REGISTRY,
-            imageReference=digest_ref,
-        )
-    elif res.access.type is cm.AccessType.RELATIVE_OCI_REFERENCE:
-        digest_ref = replace_tag_with_digest(res.access.reference, docker_content_digest)
-        digest_access = cm.RelativeOciAccess(
-            cm.AccessType.RELATIVE_OCI_REFERENCE,
-            reference=digest_ref
-        )
-    else:
-        raise NotImplementedError
-
-    return dataclasses.replace(
-        res,
-        access=digest_access,
-    )
 
 
 def process_images(
@@ -338,7 +297,6 @@ def process_images(
     upload_mode=None,
     upload_mode_cd=product.v2.UploadMode.SKIP,
     upload_mode_images=product.v2.UploadMode.SKIP,
-    replace_resource_tags_with_digests=False,
 ):
     if processing_mode is ProcessingMode.DRY_RUN:
         ci.util.warning('dry-run: not downloading or uploading any images')
@@ -371,22 +329,7 @@ def process_images(
     def process_job(processing_job: processing_model.ProcessingJob):
         # do actual processing
         if processing_mode is ProcessingMode.REGULAR:
-            docker_content_digest = process_upload_request(processing_job.upload_request, upload_mode_images)
-
-            if replace_resource_tags_with_digests:
-                if not docker_content_digest:
-                    raise RuntimeError(f'No Docker_Content_Digest returned for {processing_job=}')
-
-                processing_job.upload_request = dataclasses.replace(
-                    processing_job.upload_request,
-                    target_ref=replace_tag_with_digest(processing_job.upload_request.target_ref, docker_content_digest),
-                )
-
-                if processing_job.processed_resource:
-                    processing_job.processed_resource = access_resource_via_digest(processing_job.processed_resource, docker_content_digest)
-                else:
-                    processing_job.resource = access_resource_via_digest(processing_job.resource, docker_content_digest)
-
+            process_upload_request(processing_job.upload_request, upload_mode_images)
             bom_resources.append(
                 BOMEntry(
                     processing_job.upload_request.target_ref,
@@ -431,8 +374,7 @@ def process_images(
         # patch-in overwrites (caveat: must be done sequentially, as lists are not threadsafe)
         for job in job_group:
             component = job.component
-            patched_resource = job.processed_resource or job.resource
-            patched_resources[job.resource.identity(component.resources)] = patched_resource
+            patched_resources[job.resource.identity(component.resources)] = job.processed_resource or job.resource
             continue
 
         res_list = []
@@ -560,9 +502,6 @@ def main():
                         ],
                         default=product.v2.UploadMode.SKIP.value
                         )
-    parser.add_argument('-r', '--replace-resource-tags-with-digests', action='store_true',
-                        help='replace tags with digests for resources that are accessed via OCI references'
-                        )
 
     parsed = parser.parse_args()
 
@@ -604,7 +543,6 @@ def main():
         processing_mode=processing_mode,
         upload_mode_cd=product.v2.UploadMode(parsed.upload_mode_cd),
         upload_mode_images=product.v2.UploadMode(parsed.upload_mode_images),
-        replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
     )
 
     if parsed.component_descriptor:
