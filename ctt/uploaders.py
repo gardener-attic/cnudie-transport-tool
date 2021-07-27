@@ -6,6 +6,7 @@ import dataclasses
 
 import ci.util
 import gci.componentmodel as cm
+import oci.client
 
 import ctt.processing_model as pm
 
@@ -13,11 +14,17 @@ import ctt.processing_model as pm
 class IdentityUploader:
     def process(self, processing_job, target_as_source=False):
         upload_request = processing_job.upload_request
+
+        _, _, src_tag = oci.client._split_image_reference(upload_request.source_ref)
+        if ':' in src_tag:
+            raise NotImplementedError
+
         if not target_as_source:
             upload_request = dataclasses.replace(
                 processing_job.upload_request,
                 target_ref=processing_job.upload_request.source_ref,
             )
+
         return dataclasses.replace(
             processing_job,
             upload_request=upload_request,
@@ -37,6 +44,19 @@ def labels_with_migration_hint(
             value=src_img_ref,
         ),
     ]
+
+
+def calc_tgt_tag(src_tag: str) -> str:
+    # if the source resource is referenced via hash digest, we (1) have no symbolic
+    # tag and (2) cannot guarantee that the hash digest of the target stays the same
+    # (e.g. depends on resource filtering). Therefore we cannot simply upload the
+    # resource under the same hash digest. As a workaround, we tag these resources
+    # with the 'latest' tag by default. After the resource upload, the digest is
+    # returned in the registry response and gets written to the component descriptor
+    if ':' in src_tag:
+        return 'latest'
+    else:
+        return src_tag
 
 
 class PrefixUploader:
@@ -62,21 +82,23 @@ class PrefixUploader:
             raise RuntimeError('PrefixUploader only supports access type == ociRegistry')
 
         if not target_as_source:
-            resource = processing_job.resource
-            src_name, src_tag = resource.access.imageReference.rsplit(':', 1)
+            src_ref = processing_job.resource.access.imageReference
         else:
-            src_name, src_tag = processing_job.upload_request.target_ref.rsplit(':', 2)
+            src_ref = processing_job.upload_request.target_ref
 
+        src_prefix, src_name, src_tag = oci.client._split_image_reference(src_ref)
+
+        artifact_path = ci.util.urljoin(src_prefix, src_name)
         if self._mangle:
-            artifact_path = ':'.join([src_name.replace('.', '_'), src_tag])
-        else:
-            artifact_path = ':'.join((src_name, src_tag))
+            artifact_path = artifact_path.replace('.', '_')
 
+        tgt_tag = calc_tgt_tag(src_tag)
+        artifact_path = ':'.join((artifact_path, tgt_tag))
         tgt_ref = ci.util.urljoin(self._prefix, artifact_path)
 
         upload_request = dataclasses.replace(
             processing_job.upload_request,
-            source_ref=resource.access.imageReference,
+            source_ref=processing_job.resource.access.imageReference,
             target_ref=tgt_ref,
         )
 
@@ -100,7 +122,7 @@ class PrefixUploader:
             access=access,
             labels=labels_with_migration_hint(
                 resource=processing_job.resource,
-                src_img_ref=resource.access.imageReference,
+                src_img_ref=processing_job.resource.access.imageReference,
             ),
         )
 
@@ -124,10 +146,16 @@ class TagSuffixUploader:
             raise NotImplementedError
 
         if not target_as_source:
-            src_name, src_tag = processing_job.resource.access.imageReference.rsplit(':', 1)
+            src_ref = processing_job.resource.access.imageReference
         else:
-            src_name, src_tag = processing_job.upload_request.target_ref.rsplit(':', 2)
+            src_ref = processing_job.upload_request.target_ref
 
+        src_prefix, src_name, src_tag = oci.client._split_image_reference(src_ref)
+
+        if ':' in src_tag:
+            raise RuntimeError('Cannot append tag suffix to resource that is accessed via digest')
+
+        src_name = ci.util.urljoin(src_prefix, src_name)
         tgt_tag = self._separator.join((src_tag, self._suffix))
         tgt_ref = ':'.join((src_name, tgt_tag))
 
@@ -178,9 +206,12 @@ class RBSCCustomerFacingRepoLoader:
         if processing_job.resource.access.type is not cm.AccessType.RELATIVE_OCI_REFERENCE:
             raise RuntimeError('RBSCCustomerFacingRepoLoader only support access type == relativeOciReference')
 
-        relative_src_ref = resource.access.reference
-        src_ref = ci.util.urljoin(self._src_ctx_repo_url, relative_src_ref)
-        tgt_ref = ci.util.urljoin(self._tgt_ctx_repo_url, relative_src_ref)
+        src_ref = ci.util.urljoin(self._src_ctx_repo_url, resource.access.reference)
+        _, src_name, src_tag = oci.client._split_image_reference(src_ref)
+
+        tgt_tag = calc_tgt_tag(src_tag)
+        artifact_path = ':'.join([src_name, tgt_tag])
+        tgt_ref = ci.util.urljoin(self._tgt_ctx_repo_url, artifact_path)
 
         upload_request = dataclasses.replace(
             processing_job.upload_request,
