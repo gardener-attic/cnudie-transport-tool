@@ -339,12 +339,14 @@ def process_images(
     upload_mode_cd=product.v2.UploadMode.SKIP,
     upload_mode_images=product.v2.UploadMode.SKIP,
     replace_resource_tags_with_digests=False,
+    skip_cd_validation=False,
 ):
     if processing_mode is ProcessingMode.DRY_RUN:
         ci.util.warning('dry-run: not downloading or uploading any images')
     else:
         logger.info(f'using upload_mode_cd {upload_mode_cd}')
         logger.info(f'using upload_mode_images {upload_mode_images}')
+        logger.info(f'using skip_cd_validation {skip_cd_validation}')
 
     if upload_mode_images is product.v2.UploadMode.FAIL:
         raise NotImplementedError('upload-mode-image=fail is not a valid argument.')
@@ -475,6 +477,15 @@ def process_images(
             component=component,
         )
 
+        # Validate the patched component-descriptor and exit on fail
+        if not skip_cd_validation:
+            try:
+                dict_cd = yaml.safe_load(yaml.dump(data=dataclasses.asdict(component_descriptor), Dumper=cm.EnumValueYamlDumper))
+                cm.ComponentDescriptor.validate(dict_cd, validation_mode=cm.ValidationMode.FAIL)
+            except Exception as e:
+                logger.error(f'Schema validation for component-descriptor {component_descriptor.component.name}:{component_descriptor.component.version} failed with {e}')
+                raise e
+
         src_ctx_repo_base_url = component_descriptor.component.repositoryContexts[-2].baseUrl
         if processing_mode is ProcessingMode.REGULAR:
             if component.name == source_comp.name and component.version == source_comp.version:
@@ -546,6 +557,7 @@ def main():
     parser.add_argument('-s', '--src-ctx-repo-url')
     parser.add_argument('-n', '--component-name')
     parser.add_argument('-v', '--component-version')
+    parser.add_argument('-l', '--skip-cd-validation', action='store_true')
     parser.add_argument('-g', '--rbsc-git-url')
     parser.add_argument('-b', '--rbsc-git-branch')
     parser.add_argument('-u', '--upload-mode-cd',
@@ -605,6 +617,7 @@ def main():
         upload_mode_cd=product.v2.UploadMode(parsed.upload_mode_cd),
         upload_mode_images=product.v2.UploadMode(parsed.upload_mode_images),
         replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
+        skip_cd_validation=parsed.skip_cd_validation,
     )
 
     if parsed.component_descriptor:
