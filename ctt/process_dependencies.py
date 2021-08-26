@@ -483,7 +483,8 @@ def process_images(
                 dict_cd = yaml.safe_load(yaml.dump(data=dataclasses.asdict(component_descriptor), Dumper=cm.EnumValueYamlDumper))
                 cm.ComponentDescriptor.validate(dict_cd, validation_mode=cm.ValidationMode.FAIL)
             except Exception as e:
-                logger.error(f'Schema validation for component-descriptor {component_descriptor.component.name}:{component_descriptor.component.version} failed with {e}')
+                logger.error(f'Schema validation for component-descriptor '
+                             f'{component_descriptor.component.name}:{component_descriptor.component.version} failed with {e}')
                 raise e
 
         src_ctx_repo_base_url = component_descriptor.component.repositoryContexts[-2].baseUrl
