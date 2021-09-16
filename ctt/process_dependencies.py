@@ -13,8 +13,6 @@ import logging
 import os
 import typing
 
-import yaml
-
 import ccc.oci
 import ci.util
 import cnudie.replicate
@@ -22,12 +20,13 @@ import cnudie.retrieve
 import container.util
 import gci.componentmodel as cm
 import product.v2
+import yaml
 
 import ctt.filters as filters
 import ctt.processing_model as processing_model
 import ctt.processors as processors
-from ctt.rbsc_bom import BOMEntry, BOMEntryType, buildAndApplyBOM
 import ctt.uploaders as uploaders
+from ctt.rbsc_bom import BOMEntry, BOMEntryType, buildAndApplyBOM
 
 logger = logging.getLogger(__name__)
 
@@ -286,7 +285,7 @@ def process_upload_request(
 
     logger.info(f'start processing {src_ref} -> {tgt_ref=}')
 
-    res = container.util.filter_image(
+    res, _, _ = container.util.filter_image(
         source_ref=src_ref,
         target_ref=tgt_ref,
         remove_files=upload_request.remove_files,
