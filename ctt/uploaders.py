@@ -10,6 +10,8 @@ import oci.client
 
 import ctt.processing_model as pm
 
+original_ref_label_name = 'cloud.gardener.cnudie/migration/original_ref'
+
 
 class IdentityUploader:
     def process(self, processing_job, target_as_source=False):
@@ -36,14 +38,18 @@ def labels_with_migration_hint(
     src_img_ref,
 ):
     src_labels = resource.labels or []
-    label_name = 'cloud.gardener.cnudie/migration/original_ref'
-    src_labels = [label for label in src_labels if label.name != label_name]
-    return src_labels + [
-        cm.Label(
-            name=label_name,
-            value=src_img_ref,
-        ),
-    ]
+    original_ref_label = [label for label in src_labels if label.name == original_ref_label_name]
+    if original_ref_label:
+        # original ref label exists --> do not overwrite it
+        return src_labels
+    else:
+        # original ref label doesn't exist --> append it
+        return src_labels + [
+            cm.Label(
+                name=original_ref_label_name,
+                value=src_img_ref,
+            ),
+        ]
 
 
 def calc_tgt_tag(src_tag: str) -> str:
