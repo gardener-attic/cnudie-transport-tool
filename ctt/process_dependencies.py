@@ -346,6 +346,7 @@ def process_images(
         logger.info(f'using upload_mode_cd {upload_mode_cd}')
         logger.info(f'using upload_mode_images {upload_mode_images}')
         logger.info(f'using skip_cd_validation {skip_cd_validation}')
+        logger.info(f'using replace_resource_tags_with_digests {replace_resource_tags_with_digests}')
 
     if upload_mode_images is product.v2.UploadMode.FAIL:
         raise NotImplementedError('upload-mode-image=fail is not a valid argument.')
