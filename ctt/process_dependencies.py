@@ -25,8 +25,11 @@ import yaml
 import ctt.filters as filters
 import ctt.processing_model as processing_model
 import ctt.processors as processors
-import ctt.uploaders as uploaders
 from ctt.rbsc_bom import BOMEntry, BOMEntryType, buildAndApplyBOM
+import ctt.uploaders as uploaders
+import ctt.util as ctt_util
+
+original_tag_label_name = 'cloud.gardener.cnudie/migration/original_tag'
 
 logger = logging.getLogger(__name__)
 
@@ -307,14 +310,36 @@ def replace_tag_with_digest(image_reference: str, docker_content_digest: str) ->
     return f'{src_name}@{docker_content_digest}'
 
 
+def labels_with_original_tag(
+    resource: cm.Resource,
+    src_ref: str,
+) -> typing.Sequence[cm.Label]:
+    last_part = src_ref.split('/')[-1]
+    if '@' in last_part:
+        raise RuntimeError(f'cannot extract tag from resource that is referenced via digest. {resource=}')
+
+    _, src_tag = src_ref.rsplit(':', 1)
+    original_tag_label = cm.Label(
+        name=original_tag_label_name,
+        value=src_tag,
+    )
+    src_labels = resource.labels or []
+    return ctt_util.add_label(
+        src_labels=src_labels,
+        label=original_tag_label,
+    )
+
+
 def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> cm.Resource:
     if res.access.type is cm.AccessType.OCI_REGISTRY:
+        updated_labels = labels_with_original_tag(res, res.access.imageReference)
         digest_ref = replace_tag_with_digest(res.access.imageReference, docker_content_digest)
         digest_access = cm.OciAccess(
             cm.AccessType.OCI_REGISTRY,
             imageReference=digest_ref,
         )
     elif res.access.type is cm.AccessType.RELATIVE_OCI_REFERENCE:
+        updated_labels = labels_with_original_tag(res, res.access.reference)
         digest_ref = replace_tag_with_digest(res.access.reference, docker_content_digest)
         digest_access = cm.RelativeOciAccess(
             cm.AccessType.RELATIVE_OCI_REFERENCE,
@@ -326,6 +351,7 @@ def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> 
     return dataclasses.replace(
         res,
         access=digest_access,
+        labels=updated_labels,
     )
 
 

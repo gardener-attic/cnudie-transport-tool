@@ -9,6 +9,7 @@ import gci.componentmodel as cm
 import oci.client
 
 import ctt.processing_model as pm
+import ctt.util as ctt_util
 
 original_ref_label_name = 'cloud.gardener.cnudie/migration/original_ref'
 
@@ -37,19 +38,15 @@ def labels_with_migration_hint(
     resource: cm.Resource,
     src_img_ref,
 ):
+    original_ref_label = cm.Label(
+        name=original_ref_label_name,
+        value=src_img_ref,
+    )
     src_labels = resource.labels or []
-    original_ref_label = [label for label in src_labels if label.name == original_ref_label_name]
-    if original_ref_label:
-        # original ref label exists --> do not overwrite it
-        return src_labels
-    else:
-        # original ref label doesn't exist --> append it
-        return src_labels + [
-            cm.Label(
-                name=original_ref_label_name,
-                value=src_img_ref,
-            ),
-        ]
+    return ctt_util.add_label(
+        src_labels=src_labels,
+        label=original_ref_label,
+    )
 
 
 def calc_tgt_tag(src_tag: str) -> str:
