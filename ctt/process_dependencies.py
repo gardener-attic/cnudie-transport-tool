@@ -19,6 +19,7 @@ import cnudie.replicate
 import cnudie.retrieve
 import container.util
 import gci.componentmodel as cm
+import oci
 import product.v2
 import yaml
 
@@ -292,6 +293,7 @@ def process_upload_request(
         source_ref=src_ref,
         target_ref=tgt_ref,
         remove_files=upload_request.remove_files,
+        mode=oci.ReplicationMode.PREFER_MULTIARCH,
     )
 
     logger.info(f'finished processing {src_ref} -> {tgt_ref=}')
