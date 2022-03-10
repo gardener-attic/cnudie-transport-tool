@@ -21,7 +21,7 @@ publish=${PUBLISH:-false}
 if $publish = true; then
     echo "\$PUBLISH == true -> publish package to pypi"
 
-    model_element_cmd="cli.py config model_element --cfg-type pypi --cfg-name gardener"
+    model_element_cmd="cli.py config model_element --cfg-type pypi --cfg-name gardener-lm"
 
     username="$(${model_element_cmd} --key credentials.username)"
     passwd="$(${model_element_cmd} --key credentials.passwd)"
