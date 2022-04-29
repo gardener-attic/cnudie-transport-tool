@@ -23,6 +23,7 @@ import oci
 import product.v2
 import yaml
 
+import ctt.cosign as cosign
 import ctt.filters as filters
 import ctt.processing_model as processing_model
 import ctt.processors as processors
@@ -302,7 +303,7 @@ def process_upload_request(
     return docker_content_digest
 
 
-def replace_tag_with_digest(image_reference: str, docker_content_digest: str) -> str:
+def set_digest(image_reference: str, docker_content_digest: str) -> str:
     last_part = image_reference.split('/')[-1]
     if '@' in last_part:
         src_name, _ = image_reference.rsplit('@', 1)
@@ -335,14 +336,14 @@ def labels_with_original_tag(
 def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> cm.Resource:
     if res.access.type is cm.AccessType.OCI_REGISTRY:
         updated_labels = labels_with_original_tag(res, res.access.imageReference)
-        digest_ref = replace_tag_with_digest(res.access.imageReference, docker_content_digest)
+        digest_ref = set_digest(res.access.imageReference, docker_content_digest)
         digest_access = cm.OciAccess(
             cm.AccessType.OCI_REGISTRY,
             imageReference=digest_ref,
         )
     elif res.access.type is cm.AccessType.RELATIVE_OCI_REFERENCE:
         updated_labels = labels_with_original_tag(res, res.access.reference)
-        digest_ref = replace_tag_with_digest(res.access.reference, docker_content_digest)
+        digest_ref = set_digest(res.access.reference, docker_content_digest)
         digest_access = cm.RelativeOciAccess(
             cm.AccessType.RELATIVE_OCI_REFERENCE,
             reference=digest_ref
@@ -357,16 +358,18 @@ def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> 
     )
 
 
-def process_images(
-    processing_cfg_path,
-    component_descriptor_v2,
+def _process_images(
+    processing_cfg_path: str,
+    component_descriptor_v2: cm.ComponentDescriptor,
     tgt_ctx_base_url: str,
-    processing_mode=ProcessingMode.REGULAR,
-    upload_mode=None,
-    upload_mode_cd=product.v2.UploadMode.SKIP,
-    upload_mode_images=product.v2.UploadMode.SKIP,
-    replace_resource_tags_with_digests=False,
-    skip_cd_validation=False,
+    processing_mode: ProcessingMode,
+    upload_mode: product.v2.UploadMode,
+    upload_mode_cd: product.v2.UploadMode,
+    upload_mode_images: product.v2.UploadMode,
+    replace_resource_tags_with_digests: bool,
+    skip_cd_validation: bool,
+    generate_cosign_signatures: bool,
+    cosign_private_key_file: str,
 ):
     if processing_mode is ProcessingMode.DRY_RUN:
         ci.util.warning('dry-run: not downloading or uploading any images')
@@ -402,14 +405,46 @@ def process_images(
         # do actual processing
         if processing_mode is ProcessingMode.REGULAR:
             docker_content_digest = process_upload_request(processing_job.upload_request, upload_mode_images)
+            if not docker_content_digest:
+                raise RuntimeError(f'No Docker_Content_Digest returned for {processing_job=}')
+
+            if generate_cosign_signatures:
+                digest_ref = set_digest(processing_job.upload_request.target_ref, docker_content_digest)
+                cosign_sig_ref = cosign.generate_cosign_signature(
+                    img_ref=digest_ref,
+                    key_file=cosign_private_key_file,
+                )
+                cosign_sig_res = cm.Resource(
+                    name=f'{processing_job.resource.name}_cosign_signature',
+                    version=processing_job.resource.version,
+                    type=cm.ResourceType.COSIGN_SIGNATURE,
+                    relation=processing_job.resource.relation,
+                    access=cm.OciAccess(
+                        cm.AccessType.OCI_REGISTRY,
+                        imageReference=cosign_sig_ref,
+                    )
+                )
+
+                patched_resources = [r for r in processing_job.component.resources]
+                patched_resources.append(cosign_sig_res)
+
+                processing_job.component = dataclasses.replace(
+                    processing_job.component,
+                    resources=patched_resources,
+                )
+
+                bom_resources.append(
+                    BOMEntry(
+                        cosign_sig_res.access.imageReference,
+                        BOMEntryType.Docker,
+                        f'{processing_job.component.name}/{cosign_sig_res.name}',
+                    )
+                )
 
             if replace_resource_tags_with_digests:
-                if not docker_content_digest:
-                    raise RuntimeError(f'No Docker_Content_Digest returned for {processing_job=}')
-
                 processing_job.upload_request = dataclasses.replace(
                     processing_job.upload_request,
-                    target_ref=replace_tag_with_digest(processing_job.upload_request.target_ref, docker_content_digest),
+                    target_ref=set_digest(processing_job.upload_request.target_ref, docker_content_digest),
                 )
 
                 if processing_job.processed_resource:
@@ -577,6 +612,45 @@ def process_images(
     )
 
 
+def process_images(
+    processing_cfg_path,
+    component_descriptor_v2,
+    tgt_ctx_base_url: str,
+    processing_mode=ProcessingMode.REGULAR,
+    upload_mode=None,
+    upload_mode_cd=product.v2.UploadMode.SKIP,
+    upload_mode_images=product.v2.UploadMode.SKIP,
+    replace_resource_tags_with_digests=False,
+    skip_cd_validation=False,
+    generate_cosign_signatures=False,
+    private_key='',
+):
+    cosign_private_key_file=''
+    if generate_cosign_signatures:
+        cosign_key_files = cosign.import_key_pair_from_memory(private_key=private_key)
+        cosign_private_key_file = cosign_key_files[0]
+
+    try:
+        _process_images(
+            processing_cfg_path=processing_cfg_path,
+            component_descriptor_v2=component_descriptor_v2,
+            tgt_ctx_base_url=tgt_ctx_base_url,
+            processing_mode=processing_mode,
+            upload_mode=upload_mode,
+            upload_mode_cd=upload_mode_cd,
+            upload_mode_images=upload_mode_images,
+            replace_resource_tags_with_digests=replace_resource_tags_with_digests,
+            skip_cd_validation=skip_cd_validation,
+            generate_cosign_signatures=generate_cosign_signatures,
+            cosign_private_key_file=cosign_private_key_file
+        )
+    finally:
+        if generate_cosign_signatures:
+            for f in cosign_key_files:
+                if os.path.isfile(f):
+                    os.remove(f)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--component-descriptor')
@@ -589,6 +663,8 @@ def main():
     parser.add_argument('-l', '--skip-cd-validation', action='store_true')
     parser.add_argument('-g', '--rbsc-git-url')
     parser.add_argument('-b', '--rbsc-git-branch')
+    parser.add_argument('--generate-cosign-signatures', action='store_true', help='generate cosign signatures for copied oci image resources')
+    parser.add_argument('--private-key', help='path to file which contains a private RSA/EC key in PEM format for generating cosign signatures')
     parser.add_argument('-u', '--upload-mode-cd',
                         choices=[
                             mode.value for _, mode in product.v2.UploadMode.__members__.items()
@@ -636,6 +712,11 @@ def main():
     else:
         processing_mode = ProcessingMode.REGULAR
 
+    private_key=''
+    if parsed.generate_cosign_signatures:
+        with open(parsed.private_key, mode='r') as f:
+            private_key = f.read()
+
     print(f'will now copy/patch specified component-descriptor to {tgt_ctx_repo_url=}')
 
     component_descriptor_v2 = process_images(
@@ -647,6 +728,8 @@ def main():
         upload_mode_images=product.v2.UploadMode(parsed.upload_mode_images),
         replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
         skip_cd_validation=parsed.skip_cd_validation,
+        generate_cosign_signatures=parsed.generate_cosign_signatures,
+        private_key=private_key,
     )
 
     if parsed.component_descriptor:
