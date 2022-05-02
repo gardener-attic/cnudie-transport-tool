@@ -22,16 +22,18 @@ ci.log.configure_default_logging()
 logger = logging.getLogger(__name__)
 
 
-# generates and uploads the cosign signature for a target image ref
-# the target image must be referenced via digest, as cosign generates the signature ref based on the target image digest
-# returns the cosign signature ref
 def generate_cosign_signature(
     img_ref: str,
     key_file: str,
 ) -> str:
+    '''
+    generates and uploads the cosign signature for a target image ref
+    the target image must be referenced via digest, as cosign generates the signature ref based on the target image digest
+    returns the cosign signature ref
+    '''
     parsed_img_ref = om.OciImageReference.to_image_ref(img_ref)
     if not parsed_img_ref.has_digest_tag:
-        NotImplementedError('only images that are referenced via a digest are allowed')
+        ValueError('only images that are referenced via a digest are allowed')
 
     env = os.environ.copy()
     # set special env variable to disable password prompt from cosign
@@ -49,12 +51,14 @@ def generate_cosign_signature(
     return cosign_sig_ref
 
 
-# import a PEM-encoded RSA or EC private key via cosign from the file system
-# returns the path to the generated cosign private and public key files
-# the files must be cleaned up by the caller once they are no longer needed
 def import_key_pair_from_file(
     private_key_file: str,
 ) -> typing.Tuple[str, str]:
+    '''
+    import a PEM-encoded RSA or EC private key via cosign from the file system
+    returns the path to the generated cosign private and public key files
+    the files must be cleaned up by the caller once they are no longer needed
+    '''
     abs_private_key_file = os.path.abspath(private_key_file)
 
     tmpdir = tempfile.mkdtemp()
@@ -77,10 +81,12 @@ def import_key_pair_from_file(
     return (cosign_private_key_file, cosign_public_key_file)
 
 
-# import a PEM-encoded RSA or EC private key via cosign from memory
-# returns the path to the generated cosign private and public key files
-# the files must be cleaned up by the caller once they are no longer needed
 def import_key_pair_from_memory(private_key: str) -> typing.Tuple[str, str]:
+    '''
+    import a PEM-encoded RSA or EC private key via cosign from memory
+    returns the path to the generated cosign private and public key files
+    the files must be cleaned up by the caller once they are no longer needed
+    '''
     with tempfile.NamedTemporaryFile() as f:
         f.write(private_key.encode())
         f.seek(0)

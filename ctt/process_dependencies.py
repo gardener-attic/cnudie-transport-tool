@@ -712,7 +712,7 @@ def main():
     else:
         processing_mode = ProcessingMode.REGULAR
 
-    private_key=''
+    private_key = None
     if parsed.generate_cosign_signatures:
         with open(parsed.private_key, mode='r') as f:
             private_key = f.read()
