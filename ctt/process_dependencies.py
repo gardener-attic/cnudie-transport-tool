@@ -11,6 +11,8 @@ import enum
 import itertools
 import logging
 import os
+import shutil
+import tempfile
 import typing
 
 import ccc.oci
@@ -627,7 +629,11 @@ def process_images(
 ):
     cosign_private_key_file=''
     if generate_cosign_signatures:
-        cosign_key_files = cosign.import_key_pair_from_memory(private_key=private_key)
+        tmp_dir = tempfile.mkdtemp()
+        cosign_key_files = cosign.import_key_pair_from_memory(
+            private_key=private_key, 
+            tgt_dir=tmp_dir,
+        )
         cosign_private_key_file = cosign_key_files[0]
 
     try:
@@ -642,13 +648,11 @@ def process_images(
             replace_resource_tags_with_digests=replace_resource_tags_with_digests,
             skip_cd_validation=skip_cd_validation,
             generate_cosign_signatures=generate_cosign_signatures,
-            cosign_private_key_file=cosign_private_key_file
+            cosign_private_key_file=cosign_private_key_file,
         )
     finally:
         if generate_cosign_signatures:
-            for f in cosign_key_files:
-                if os.path.isfile(f):
-                    os.remove(f)
+            shutil.rmtree(tmp_dir)
 
 
 def main():
