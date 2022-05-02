@@ -53,10 +53,10 @@ def generate_cosign_signature(
     if not parsed_img_ref.has_digest_tag:
         ValueError('only images that are referenced via a digest are allowed')
 
-    cmd = f'cosign sign --key {key_file} {img_ref}'
+    cmd = ['cosign', 'sign', img_ref, '--key', key_file]
     env = _prepare_env(env=env)
     logger.info(f'run cmd \'{cmd}\'')
-    subprocess.run(cmd.split(' '), check=True, env=env)
+    subprocess.run(cmd, check=True, env=env)
 
     parsed_digest = parsed_img_ref.parsed_digest_tag
     alg, val = parsed_digest
@@ -76,10 +76,10 @@ def import_key_pair_from_file(
     '''
     abs_private_key_file = os.path.abspath(private_key_file)
 
-    cmd = f'cosign import-key-pair --key {abs_private_key_file}'
+    cmd = ['cosign', 'import-key-pair', '--key', abs_private_key_file]
     env = _prepare_env(env=env)
     logger.info(f'run cmd \'{cmd}\'')
-    subprocess.run(cmd.split(' '), check=True, cwd=tgt_dir, env=env)
+    subprocess.run(cmd, check=True, cwd=tgt_dir, env=env)
 
     cosign_private_key_file = os.path.join(tgt_dir, cosign_private_key_filename)
     cosign_public_key_file = os.path.join(tgt_dir, cosign_public_key_filename)
