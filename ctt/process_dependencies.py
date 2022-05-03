@@ -11,6 +11,7 @@ import enum
 import itertools
 import logging
 import os
+import pprint
 import typing
 
 import ccc.oci
@@ -275,7 +276,8 @@ def create_jobs(
 # uploads a single OCI artifact and returns the content digest
 def process_upload_request(
     upload_request: processing_model.ContainerImageUploadRequest,
-    upload_mode_images=product.v2.UploadMode.SKIP
+    upload_mode_images=product.v2.UploadMode.SKIP,
+    replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
 ) -> str:
     tgt_ref = upload_request.target_ref
 
@@ -293,7 +295,7 @@ def process_upload_request(
         source_ref=src_ref,
         target_ref=tgt_ref,
         remove_files=upload_request.remove_files,
-        mode=oci.ReplicationMode.PREFER_MULTIARCH,
+        mode=replication_mode,
     )
 
     logger.info(f'finished processing {src_ref} -> {tgt_ref=}')
@@ -365,16 +367,14 @@ def process_images(
     upload_mode=None,
     upload_mode_cd=product.v2.UploadMode.SKIP,
     upload_mode_images=product.v2.UploadMode.SKIP,
+    replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
     replace_resource_tags_with_digests=False,
     skip_cd_validation=False,
 ):
+    logger.info(pprint.pformat(locals()))
+
     if processing_mode is ProcessingMode.DRY_RUN:
         ci.util.warning('dry-run: not downloading or uploading any images')
-    else:
-        logger.info(f'using upload_mode_cd {upload_mode_cd}')
-        logger.info(f'using upload_mode_images {upload_mode_images}')
-        logger.info(f'using skip_cd_validation {skip_cd_validation}')
-        logger.info(f'using replace_resource_tags_with_digests {replace_resource_tags_with_digests}')
 
     if upload_mode_images is product.v2.UploadMode.FAIL:
         raise NotImplementedError('upload-mode-image=fail is not a valid argument.')
@@ -401,7 +401,11 @@ def process_images(
     def process_job(processing_job: processing_model.ProcessingJob):
         # do actual processing
         if processing_mode is ProcessingMode.REGULAR:
-            docker_content_digest = process_upload_request(processing_job.upload_request, upload_mode_images)
+            docker_content_digest = process_upload_request(
+                upload_request=processing_job.upload_request,
+                upload_mode_images=upload_mode_images,
+                replication_mode=replication_mode,
+            )
 
             if replace_resource_tags_with_digests:
                 if not docker_content_digest:
@@ -604,6 +608,13 @@ def main():
     parser.add_argument('-r', '--replace-resource-tags-with-digests', action='store_true',
                         help='replace tags with digests for resources that are accessed via OCI references'
                         )
+    parser.add_argument('--replication-mode',
+                        help='replication mode for OCI resources',
+                        choices=[
+                            mode.value for _, mode in oci.ReplicationMode.__members__.items()
+                        ],
+                        default=oci.ReplicationMode.PREFER_MULTIARCH
+                        )
 
     parsed = parser.parse_args()
 
@@ -645,6 +656,7 @@ def main():
         processing_mode=processing_mode,
         upload_mode_cd=product.v2.UploadMode(parsed.upload_mode_cd),
         upload_mode_images=product.v2.UploadMode(parsed.upload_mode_images),
+        replication_mode=oci.ReplicationMode(parsed.replication_mode),
         replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
         skip_cd_validation=parsed.skip_cd_validation,
     )
