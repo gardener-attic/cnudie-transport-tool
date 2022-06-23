@@ -8,12 +8,11 @@ import argparse
 import concurrent.futures
 import dataclasses
 import enum
+import hashlib
 import itertools
 import logging
 import os
 import pprint
-import shutil
-import tempfile
 import typing
 
 import ccc.oci
@@ -362,19 +361,20 @@ def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> 
     )
 
 
-def _process_images(
-    processing_cfg_path: str,
-    component_descriptor_v2: cm.ComponentDescriptor,
+def process_images(
+    processing_cfg_path,
+    component_descriptor_v2,
     tgt_ctx_base_url: str,
-    processing_mode: ProcessingMode,
-    upload_mode: product.v2.UploadMode,
-    upload_mode_cd: product.v2.UploadMode,
-    upload_mode_images: product.v2.UploadMode,
-    replication_mode: oci.ReplicationMode,
-    replace_resource_tags_with_digests: bool,
-    skip_cd_validation: bool,
-    generate_cosign_signatures: bool,
-    cosign_private_key_file: str,
+    processing_mode=ProcessingMode.REGULAR,
+    upload_mode=None,
+    upload_mode_cd=product.v2.UploadMode.SKIP,
+    upload_mode_images=product.v2.UploadMode.SKIP,
+    replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
+    replace_resource_tags_with_digests=False,
+    skip_cd_validation=False,
+    generate_cosign_signatures=False,
+    signing_server_url=None,
+    root_ca_cert_path=None
 ):
     logger.info(pprint.pformat(locals()))
 
@@ -417,12 +417,24 @@ def _process_images(
 
             if generate_cosign_signatures:
                 digest_ref = set_digest(processing_job.upload_request.target_ref, docker_content_digest)
-                cosign_sig_ref = cosign.generate_cosign_signature(
-                    img_ref=digest_ref,
-                    key_file=cosign_private_key_file,
+
+                unsigned_payload = cp.Payload(
+                    image_ref=digest_ref,
+                ).json()
+                hash = hashlib.sha256(unsigned_payload.encode())
+                digest = hash.digest()
+                signature = ctt_util.sign_with_signing_server(
+                    server_url=signing_server_url,
+                    content=digest,
+                    root_ca_cert_path=root_ca_cert_path,
+                )
+                cosign_sig_ref = cosign.attach_signature(
+                    image_ref=digest_ref,
+                    unsigned_payload=unsigned_payload.encode(),
+                    signature=signature.encode(),
                 )
                 cosign_sig_res = cm.Resource(
-                    name=f'{processing_job.resource.name}_cosign_signature',
+                    name=f'{processing_job.resource.name}-cosign-signature',
                     version=processing_job.resource.version,
                     type=cm.ResourceType.COSIGN_SIGNATURE,
                     relation=processing_job.resource.relation,
@@ -619,49 +631,6 @@ def _process_images(
     )
 
 
-def process_images(
-    processing_cfg_path,
-    component_descriptor_v2,
-    tgt_ctx_base_url: str,
-    processing_mode=ProcessingMode.REGULAR,
-    upload_mode=None,
-    upload_mode_cd=product.v2.UploadMode.SKIP,
-    upload_mode_images=product.v2.UploadMode.SKIP,
-    replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
-    replace_resource_tags_with_digests=False,
-    skip_cd_validation=False,
-    generate_cosign_signatures=False,
-    private_key='',
-):
-    cosign_private_key_file=''
-    if generate_cosign_signatures:
-        tmp_dir = tempfile.mkdtemp()
-        cosign_key_files = cosign.import_key_pair_from_memory(
-            private_key=private_key, 
-            tgt_dir=tmp_dir,
-        )
-        cosign_private_key_file = cosign_key_files[0]
-
-    try:
-        _process_images(
-            processing_cfg_path=processing_cfg_path,
-            component_descriptor_v2=component_descriptor_v2,
-            tgt_ctx_base_url=tgt_ctx_base_url,
-            processing_mode=processing_mode,
-            upload_mode=upload_mode,
-            upload_mode_cd=upload_mode_cd,
-            upload_mode_images=upload_mode_images,
-            replication_mode=replication_mode,
-            replace_resource_tags_with_digests=replace_resource_tags_with_digests,
-            skip_cd_validation=skip_cd_validation,
-            generate_cosign_signatures=generate_cosign_signatures,
-            cosign_private_key_file=cosign_private_key_file,
-        )
-    finally:
-        if generate_cosign_signatures:
-            shutil.rmtree(tmp_dir)
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--component-descriptor')
@@ -675,7 +644,8 @@ def main():
     parser.add_argument('-g', '--rbsc-git-url')
     parser.add_argument('-b', '--rbsc-git-branch')
     parser.add_argument('--generate-cosign-signatures', action='store_true', help='generate cosign signatures for copied oci image resources')
-    parser.add_argument('--private-key', help='path to file which contains a private RSA/EC key in PEM format for generating cosign signatures')
+    parser.add_argument('--signing-server-url', help='url of the signing server which is used for generating cosign signatures')
+    parser.add_argument('--root-ca-cert', help='path to a file which contains the root ca cert in pem format for verifying the signing server tls certificate')
     parser.add_argument('-u', '--upload-mode-cd',
                         choices=[
                             mode.value for _, mode in product.v2.UploadMode.__members__.items()
@@ -730,11 +700,6 @@ def main():
     else:
         processing_mode = ProcessingMode.REGULAR
 
-    private_key = None
-    if parsed.generate_cosign_signatures:
-        with open(parsed.private_key, mode='r') as f:
-            private_key = f.read()
-
     print(f'will now copy/patch specified component-descriptor to {tgt_ctx_repo_url=}')
 
     component_descriptor_v2 = process_images(
@@ -748,7 +713,8 @@ def main():
         replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
         skip_cd_validation=parsed.skip_cd_validation,
         generate_cosign_signatures=parsed.generate_cosign_signatures,
-        private_key=private_key,
+        signing_server_url=parsed.signing_server_url,
+        root_ca_cert_path=parsed.root_ca_cert,
     )
 
     if parsed.component_descriptor:
