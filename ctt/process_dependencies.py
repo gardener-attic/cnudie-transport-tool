@@ -20,6 +20,7 @@ import ci.util
 import cnudie.replicate
 import cnudie.retrieve
 import container.util
+import cosign.payload as cp
 import gci.componentmodel as cm
 import oci
 import product.v2
@@ -40,6 +41,11 @@ logger = logging.getLogger(__name__)
 own_dir = os.path.abspath(os.path.dirname(__file__))
 
 bom_resources: typing.Sequence[BOMEntry] = []
+
+
+class UploadMode(enum.Enum):
+    APPEND = 'append'
+    SKIP = 'skip'
 
 
 class ProcessingMode(enum.Enum):
@@ -373,6 +379,7 @@ def process_images(
     replace_resource_tags_with_digests=False,
     skip_cd_validation=False,
     generate_cosign_signatures=False,
+    upload_mode_cosign=UploadMode.SKIP,
     signing_server_url=None,
     root_ca_cert_path=None
 ):
@@ -417,22 +424,31 @@ def process_images(
 
             if generate_cosign_signatures:
                 digest_ref = set_digest(processing_job.upload_request.target_ref, docker_content_digest)
+                cosign_sig_ref = cosign.calc_cosign_sig_ref(image_ref=digest_ref)
 
-                unsigned_payload = cp.Payload(
-                    image_ref=digest_ref,
-                ).json()
-                hash = hashlib.sha256(unsigned_payload.encode())
-                digest = hash.digest()
-                signature = ctt_util.sign_with_signing_server(
-                    server_url=signing_server_url,
-                    content=digest,
-                    root_ca_cert_path=root_ca_cert_path,
-                )
-                cosign_sig_ref = cosign.attach_signature(
-                    image_ref=digest_ref,
-                    unsigned_payload=unsigned_payload.encode(),
-                    signature=signature.encode(),
-                )
+                oci_client = ccc.oci.oci_client()
+                manifest_blob_ref = oci_client.head_manifest(image_reference=cosign_sig_ref, absent_ok=True)
+                # cosign every time appends the signature in the signature oci artifact, even if the exact
+                # same signature already exists there. therefore, add option to skip this behavior
+                if bool(manifest_blob_ref) and upload_mode_cosign is UploadMode.SKIP:
+                    logger.info(f'cosign signature {cosign_sig_ref=} exists - skipping generation')
+                else:
+                    unsigned_payload = cp.Payload(
+                        image_ref=digest_ref,
+                    ).json()
+                    hash = hashlib.sha256(unsigned_payload.encode())
+                    digest = hash.digest()
+                    signature = ctt_util.sign_with_signing_server(
+                        server_url=signing_server_url,
+                        content=digest,
+                        root_ca_cert_path=root_ca_cert_path,
+                    )
+                    cosign.attach_signature(
+                        image_ref=digest_ref,
+                        unsigned_payload=unsigned_payload.encode(),
+                        signature=signature.encode(),
+                    )
+
                 cosign_sig_res = cm.Resource(
                     name=f'{processing_job.resource.name}-cosign-signature',
                     version=processing_job.resource.version,
@@ -644,6 +660,12 @@ def main():
     parser.add_argument('-g', '--rbsc-git-url')
     parser.add_argument('-b', '--rbsc-git-branch')
     parser.add_argument('--generate-cosign-signatures', action='store_true', help='generate cosign signatures for copied oci image resources')
+    parser.add_argument('--upload-mode-cosign',
+                        choices=[
+                            mode.value for _, mode in UploadMode.__members__.items()
+                        ],
+                        default=UploadMode.SKIP.value
+                        )
     parser.add_argument('--signing-server-url', help='url of the signing server which is used for generating cosign signatures')
     parser.add_argument('--root-ca-cert', help='path to a file which contains the root ca cert in pem format for verifying the signing server tls certificate')
     parser.add_argument('-u', '--upload-mode-cd',
@@ -713,6 +735,7 @@ def main():
         replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
         skip_cd_validation=parsed.skip_cd_validation,
         generate_cosign_signatures=parsed.generate_cosign_signatures,
+        upload_mode_cosign=parsed.upload_mode_cosign,
         signing_server_url=parsed.signing_server_url,
         root_ca_cert_path=parsed.root_ca_cert,
     )

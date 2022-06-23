@@ -84,6 +84,6 @@ def sign_with_signing_server(
 
     signature_pem = [b for b in pem_blocks if b.type.lower() == 'signature']
     if len(signature_pem) != 1:
-        raise RuntimeError()
+        raise RuntimeError('signing server response doesn\'t contain signature pem block')
 
     return signature_pem[0].content
