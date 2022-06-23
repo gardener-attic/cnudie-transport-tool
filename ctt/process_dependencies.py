@@ -435,7 +435,7 @@ def process_images(
                 else:
                     unsigned_payload = cp.Payload(
                         image_ref=digest_ref,
-                    ).json()
+                    ).normalised_json()
                     hash = hashlib.sha256(unsigned_payload.encode())
                     digest = hash.digest()
                     signature = ctt_util.sign_with_signing_server(
