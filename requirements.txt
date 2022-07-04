@@ -1,1 +1,1 @@
-gardener-cicd-libs>=1.1694.0
+gardener-cicd-libs>=1.1773.0
