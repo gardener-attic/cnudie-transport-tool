@@ -444,6 +444,7 @@ def process_images(
                         if existing_signature == signature:
                             signature_exists = True
                             break
+
                 if not signature_exists:
                     cosign.attach_signature(
                         image_ref=digest_ref,
