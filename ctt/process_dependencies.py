@@ -8,6 +8,7 @@ import argparse
 import concurrent.futures
 import dataclasses
 import enum
+import hashlib
 import itertools
 import logging
 import os
@@ -19,11 +20,13 @@ import ci.util
 import cnudie.replicate
 import cnudie.retrieve
 import container.util
+import cosign.payload as cp
 import gci.componentmodel as cm
 import oci
 import product.v2
 import yaml
 
+import ctt.cosign as cosign
 import ctt.filters as filters
 import ctt.processing_model as processing_model
 import ctt.processors as processors
@@ -304,7 +307,7 @@ def process_upload_request(
     return docker_content_digest
 
 
-def replace_tag_with_digest(image_reference: str, docker_content_digest: str) -> str:
+def set_digest(image_reference: str, docker_content_digest: str) -> str:
     last_part = image_reference.split('/')[-1]
     if '@' in last_part:
         src_name, _ = image_reference.rsplit('@', 1)
@@ -337,14 +340,14 @@ def labels_with_original_tag(
 def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> cm.Resource:
     if res.access.type is cm.AccessType.OCI_REGISTRY:
         updated_labels = labels_with_original_tag(res, res.access.imageReference)
-        digest_ref = replace_tag_with_digest(res.access.imageReference, docker_content_digest)
+        digest_ref = set_digest(res.access.imageReference, docker_content_digest)
         digest_access = cm.OciAccess(
             cm.AccessType.OCI_REGISTRY,
             imageReference=digest_ref,
         )
     elif res.access.type is cm.AccessType.RELATIVE_OCI_REFERENCE:
         updated_labels = labels_with_original_tag(res, res.access.reference)
-        digest_ref = replace_tag_with_digest(res.access.reference, docker_content_digest)
+        digest_ref = set_digest(res.access.reference, docker_content_digest)
         digest_access = cm.RelativeOciAccess(
             cm.AccessType.RELATIVE_OCI_REFERENCE,
             reference=digest_ref
@@ -370,6 +373,9 @@ def process_images(
     replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
     replace_resource_tags_with_digests=False,
     skip_cd_validation=False,
+    generate_cosign_signatures=False,
+    signing_server_url=None,
+    root_ca_cert_path=None
 ):
     logger.info(pprint.pformat(locals()))
 
@@ -407,13 +413,76 @@ def process_images(
                 replication_mode=replication_mode,
             )
 
-            if replace_resource_tags_with_digests:
-                if not docker_content_digest:
-                    raise RuntimeError(f'No Docker_Content_Digest returned for {processing_job=}')
+            if not docker_content_digest:
+                raise RuntimeError(f'No Docker_Content_Digest returned for {processing_job=}')
 
+            if generate_cosign_signatures:
+                digest_ref = set_digest(processing_job.upload_request.target_ref, docker_content_digest)
+                cosign_sig_ref = cosign.calc_cosign_sig_ref(image_ref=digest_ref)
+
+                unsigned_payload = cp.Payload(
+                    image_ref=digest_ref,
+                ).normalised_json()
+                hash = hashlib.sha256(unsigned_payload.encode())
+                digest = hash.digest()
+                signature = ctt_util.sign_with_signing_server(
+                    server_url=signing_server_url,
+                    content=digest,
+                    root_ca_cert_path=root_ca_cert_path,
+                )
+
+                # cosign every time appends the signature in the signature oci artifact, even if the exact
+                # same signature already exists there. therefore, check if the exact same signature already exists
+                signature_exists = False
+
+                oci_client = ccc.oci.oci_client()
+                manifest_blob_ref = oci_client.head_manifest(image_reference=cosign_sig_ref, absent_ok=True)
+                if bool(manifest_blob_ref):
+                    cosign_sig_manifest = oci_client.manifest(cosign_sig_ref)
+                    for layer in cosign_sig_manifest.layers:
+                        existing_signature = layer.annotations.get("dev.cosignproject.cosign/signature", "")
+                        if existing_signature == signature:
+                            signature_exists = True
+                            break
+
+                if not signature_exists:
+                    cosign.attach_signature(
+                        image_ref=digest_ref,
+                        unsigned_payload=unsigned_payload.encode(),
+                        signature=signature.encode(),
+                    )
+
+                cosign_sig_res = cm.Resource(
+                    name=f'{processing_job.resource.name}-cosign-signature',
+                    version=processing_job.resource.version,
+                    type=cm.ResourceType.COSIGN_SIGNATURE,
+                    relation=processing_job.resource.relation,
+                    access=cm.OciAccess(
+                        cm.AccessType.OCI_REGISTRY,
+                        imageReference=cosign_sig_ref,
+                    )
+                )
+
+                patched_resources = [r for r in processing_job.component.resources]
+                patched_resources.append(cosign_sig_res)
+
+                processing_job.component = dataclasses.replace(
+                    processing_job.component,
+                    resources=patched_resources,
+                )
+
+                bom_resources.append(
+                    BOMEntry(
+                        cosign_sig_res.access.imageReference,
+                        BOMEntryType.Docker,
+                        f'{processing_job.component.name}/{cosign_sig_res.name}',
+                    )
+                )
+
+            if replace_resource_tags_with_digests:
                 processing_job.upload_request = dataclasses.replace(
                     processing_job.upload_request,
-                    target_ref=replace_tag_with_digest(processing_job.upload_request.target_ref, docker_content_digest),
+                    target_ref=set_digest(processing_job.upload_request.target_ref, docker_content_digest),
                 )
 
                 if processing_job.processed_resource:
@@ -593,6 +662,9 @@ def main():
     parser.add_argument('-l', '--skip-cd-validation', action='store_true')
     parser.add_argument('-g', '--rbsc-git-url')
     parser.add_argument('-b', '--rbsc-git-branch')
+    parser.add_argument('--generate-cosign-signatures', action='store_true', help='generate cosign signatures for copied oci image resources')
+    parser.add_argument('--signing-server-url', help='url of the signing server which is used for generating cosign signatures')
+    parser.add_argument('--root-ca-cert', help='path to a file which contains the root ca cert in pem format for verifying the signing server tls certificate')
     parser.add_argument('-u', '--upload-mode-cd',
                         choices=[
                             mode.value for _, mode in product.v2.UploadMode.__members__.items()
@@ -659,6 +731,9 @@ def main():
         replication_mode=oci.ReplicationMode(parsed.replication_mode),
         replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
         skip_cd_validation=parsed.skip_cd_validation,
+        generate_cosign_signatures=parsed.generate_cosign_signatures,
+        signing_server_url=parsed.signing_server_url,
+        root_ca_cert_path=parsed.root_ca_cert,
     )
 
     if parsed.component_descriptor:
