@@ -662,9 +662,11 @@ def main():
     parser.add_argument('-l', '--skip-cd-validation', action='store_true')
     parser.add_argument('-g', '--rbsc-git-url')
     parser.add_argument('-b', '--rbsc-git-branch')
-    parser.add_argument('--generate-cosign-signatures', action='store_true', help='generate cosign signatures for copied oci image resources')
+    parser.add_argument('--generate-cosign-signatures', action='store_true',
+                        help='generate cosign signatures for copied oci image resources')
     parser.add_argument('--signing-server-url', help='url of the signing server which is used for generating cosign signatures')
-    parser.add_argument('--root-ca-cert', help='path to a file which contains the root ca cert in pem format for verifying the signing server tls certificate')
+    parser.add_argument('--root-ca-cert', help='''path to a file which contains the root ca cert in pem format for verifying
+ the signing server tls certificate''')
     parser.add_argument('-u', '--upload-mode-cd',
                         choices=[
                             mode.value for _, mode in product.v2.UploadMode.__members__.items()
