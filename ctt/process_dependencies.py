@@ -460,7 +460,8 @@ def process_images(
                     access=cm.OciAccess(
                         cm.AccessType.OCI_REGISTRY,
                         imageReference=cosign_sig_ref,
-                    )
+                    ),
+                    digest=cm.ExcludeFromSignatureDigest(),
                 )
 
                 patched_resources = [r for r in processing_job.component.resources]
