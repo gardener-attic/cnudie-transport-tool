@@ -452,34 +452,6 @@ def process_images(
                         signature=signature.encode(),
                     )
 
-                cosign_sig_res = cm.Resource(
-                    name=f'{processing_job.resource.name}-cosign-signature',
-                    version=processing_job.resource.version,
-                    type=cm.ResourceType.COSIGN_SIGNATURE,
-                    relation=processing_job.resource.relation,
-                    access=cm.OciAccess(
-                        cm.AccessType.OCI_REGISTRY,
-                        imageReference=cosign_sig_ref,
-                    ),
-                    digest=cm.ExcludeFromSignatureDigest(),
-                )
-
-                patched_resources = [r for r in processing_job.component.resources]
-                patched_resources.append(cosign_sig_res)
-
-                processing_job.component = dataclasses.replace(
-                    processing_job.component,
-                    resources=patched_resources,
-                )
-
-                bom_resources.append(
-                    BOMEntry(
-                        cosign_sig_res.access.imageReference,
-                        BOMEntryType.Docker,
-                        f'{processing_job.component.name}/{cosign_sig_res.name}',
-                    )
-                )
-
             if replace_resource_tags_with_digests:
                 processing_job.upload_request = dataclasses.replace(
                     processing_job.upload_request,
