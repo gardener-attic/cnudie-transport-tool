@@ -294,7 +294,7 @@ def process_upload_request(
 
     logger.info(f'start processing {src_ref} -> {tgt_ref=}')
 
-    res, _, _ = container.util.filter_image(
+    _, _, raw_manifest = container.util.filter_image(
         source_ref=src_ref,
         target_ref=tgt_ref,
         remove_files=upload_request.remove_files,
@@ -303,8 +303,8 @@ def process_upload_request(
 
     logger.info(f'finished processing {src_ref} -> {tgt_ref=}')
 
-    docker_content_digest = res.headers.get('Docker-Content-Digest', None)
-    return docker_content_digest
+    manifest_digest = hashlib.sha256(raw_manifest).hexdigest()
+    return f'sha256:{manifest_digest}'
 
 
 def set_digest(image_reference: str, docker_content_digest: str) -> str:
