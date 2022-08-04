@@ -31,6 +31,7 @@ class BOMEntry:
     type: BOMEntryType
     # component name
     comp: str
+    mode: str = 'PREFER_MULTIARCH'
 
 
 @dataclasses.dataclass
