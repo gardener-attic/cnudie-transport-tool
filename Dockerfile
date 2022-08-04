@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM eu.gcr.io/gardener-project/cc/job-image:1.1813.0
+FROM eu.gcr.io/gardener-project/cc/job-image:1.1814.0
 
 COPY . /cnudie-transport-tool
 
