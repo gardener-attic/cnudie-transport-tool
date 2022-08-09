@@ -254,6 +254,7 @@ def create_jobs(
             ):
                 yield component, oci_resource
 
+    processed_target_refs = set()
     # XXX only support OCI-resources for now
     for component, oci_resource in enumerate_component_and_oci_resources():
         for pipeline in enum_processing_cfgs(
@@ -266,6 +267,13 @@ def create_jobs(
                 resource=oci_resource,
                 processing_mode=processing_mode,
             )
+
+            if (target_ref := job.upload_request.target_ref) in processed_target_refs:
+                # another job already handles this push target
+                logger.info(f'skipping {target_ref=}')
+                continue
+            processed_target_refs.add(target_ref)
+
             if not job:
                 continue  # pipeline did not want to process
             yield job
