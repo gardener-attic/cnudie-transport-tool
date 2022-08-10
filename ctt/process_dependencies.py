@@ -268,14 +268,15 @@ def create_jobs(
                 processing_mode=processing_mode,
             )
 
+            if not job:
+                continue  # pipeline did not want to process
+
             if (target_ref := job.upload_request.target_ref) in processed_target_refs:
                 # another job already handles this push target
                 logger.info(f'skipping {target_ref=}')
                 continue
             processed_target_refs.add(target_ref)
 
-            if not job:
-                continue  # pipeline did not want to process
             yield job
             break
         else:
