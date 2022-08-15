@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import os
 import subprocess
 import tempfile
 
@@ -19,18 +20,22 @@ def attach_signature(
     image_ref: str,
     unsigned_payload: bytes,
     signature: bytes,
-) -> str:
+    cosign_repository=None,
+):
     '''
     attach a cosign signature to an image in a remote oci registry.
     '''
-    cosign_sig_ref = calc_cosign_sig_ref(image_ref=image_ref)
-
     with tempfile.NamedTemporaryFile('wb') as payloadfile, tempfile.NamedTemporaryFile('wb') as signaturefile:
         payloadfile.write(unsigned_payload)
         payloadfile.flush()
 
         signaturefile.write(signature)
         signaturefile.flush()
+
+        env = None
+        if cosign_repository:
+            env = os.environ.copy()
+            env['COSIGN_REPOSITORY'] = cosign_repository
 
         cmd = [
             'cosign',
@@ -42,10 +47,9 @@ def attach_signature(
             signaturefile.name,
             image_ref
         ]
-        logger.info(f'run cmd \'{cmd}\'')
-        subprocess.run(cmd, check=True)
 
-        return cosign_sig_ref
+        logger.info(f'run cmd \'{cmd}\'')
+        subprocess.run(cmd, env=env, check=True)
 
 
 def calc_cosign_sig_ref(

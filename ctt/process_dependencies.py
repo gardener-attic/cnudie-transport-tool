@@ -383,8 +383,9 @@ def process_images(
     replace_resource_tags_with_digests=False,
     skip_cd_validation=False,
     generate_cosign_signatures=False,
+    cosign_repository=None,
     signing_server_url=None,
-    root_ca_cert_path=None
+    root_ca_cert_path=None,
 ):
     logger.info(pprint.pformat(locals()))
 
@@ -459,6 +460,7 @@ def process_images(
                         image_ref=digest_ref,
                         unsigned_payload=unsigned_payload.encode(),
                         signature=signature.encode(),
+                        cosign_repository=cosign_repository,
                     )
 
             if replace_resource_tags_with_digests:
@@ -646,6 +648,7 @@ def main():
     parser.add_argument('-b', '--rbsc-git-branch')
     parser.add_argument('--generate-cosign-signatures', action='store_true',
                         help='generate cosign signatures for copied oci image resources')
+    parser.add_argument('--cosign-repository', help='oci repository where cosign signatures should be stored')
     parser.add_argument('--signing-server-url', help='url of the signing server which is used for generating cosign signatures')
     parser.add_argument('--root-ca-cert', help='''path to a file which contains the root ca cert in pem format for verifying
  the signing server tls certificate''')
@@ -716,6 +719,7 @@ def main():
         replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
         skip_cd_validation=parsed.skip_cd_validation,
         generate_cosign_signatures=parsed.generate_cosign_signatures,
+        cosign_repository=parsed.cosign_repository,
         signing_server_url=parsed.signing_server_url,
         root_ca_cert_path=parsed.root_ca_cert,
     )
