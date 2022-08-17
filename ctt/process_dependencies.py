@@ -14,6 +14,7 @@ import logging
 import os
 import pprint
 import typing
+import threading
 
 import ccc.oci
 import ci.util
@@ -254,7 +255,6 @@ def create_jobs(
             ):
                 yield component, oci_resource
 
-    processed_target_refs = set()
     # XXX only support OCI-resources for now
     for component, oci_resource in enumerate_component_and_oci_resources():
         for pipeline in enum_processing_cfgs(
@@ -271,12 +271,6 @@ def create_jobs(
             if not job:
                 continue  # pipeline did not want to process
 
-            if (target_ref := job.upload_request.target_ref) in processed_target_refs:
-                # another job already handles this push target
-                logger.info(f'skipping {target_ref=}')
-                continue
-            processed_target_refs.add(target_ref)
-
             yield job
             break
         else:
@@ -285,18 +279,50 @@ def create_jobs(
             )
 
 
+uploaded_image_refs_to_digests = {} # <ref>:<digest>
+uploaded_image_refs_to_ready_events = {} # <ref>:<event> (set if digest is available)
+upload_image_lock = threading.Lock()
+
+
 # uploads a single OCI artifact and returns the content digest
 def process_upload_request(
     upload_request: processing_model.ContainerImageUploadRequest,
     upload_mode_images=product.v2.UploadMode.SKIP,
     replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
 ) -> str:
+    global uploaded_image_refs_to_digests
+    global uploaded_image_refs_to_ready_events
+    global upload_image_lock
+
     tgt_ref = upload_request.target_ref
+
+    # if event is present, upload might still be in progress (done if event is "set")
+    with upload_image_lock:
+        if tgt_ref in uploaded_image_refs_to_ready_events:
+            upload_done_event = uploaded_image_refs_to_ready_events[tgt_ref]
+            wait_for_upload = True
+        else:
+            upload_done_event = threading.Event()
+            uploaded_image_refs_to_ready_events[tgt_ref] = upload_done_event
+            wait_for_upload = False
+
+    if wait_for_upload:
+        upload_done_event.wait()
+
+    if tgt_ref in uploaded_image_refs_to_digests: # digest already present
+        logger.info(f'{tgt_ref=} - was already uploaded by another rule - skipping')
+        return uploaded_image_refs_to_digests[tgt_ref]
+
+    # most common case: tgt has not yet been processed - process and afterwards signal
+    # other threads waiting for upload result that result is ready be setting the event
 
     oci_client = ccc.oci.oci_client()
     manifest_blob_ref = oci_client.head_manifest(image_reference=tgt_ref, absent_ok=True)
     if bool(manifest_blob_ref) and upload_mode_images is product.v2.UploadMode.SKIP:
         logger.info(f'{tgt_ref=} exists - skipping processing')
+
+        uploaded_image_refs_to_digests[tgt_ref] = manifest_blob_ref.digest
+        upload_done_event.set()
         return manifest_blob_ref.digest
 
     src_ref = upload_request.source_ref
@@ -313,6 +339,8 @@ def process_upload_request(
     logger.info(f'finished processing {src_ref} -> {tgt_ref=}')
 
     manifest_digest = hashlib.sha256(raw_manifest).hexdigest()
+    uploaded_image_refs_to_digests[tgt_ref] = f'sha256:{manifest_digest}'
+    upload_done_event.set()
     return f'sha256:{manifest_digest}'
 
 
