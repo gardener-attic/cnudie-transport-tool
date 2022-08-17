@@ -279,8 +279,8 @@ def create_jobs(
             )
 
 
-uploaded_image_refs_to_digests = {} # <ref>:<digest>
-uploaded_image_refs_to_ready_events = {} # <ref>:<event> (set if digest is available)
+uploaded_image_refs_to_digests = {}  # <ref>:<digest>
+uploaded_image_refs_to_ready_events = {}  # <ref>:<event> (set if digest is available)
 upload_image_lock = threading.Lock()
 
 
@@ -309,7 +309,7 @@ def process_upload_request(
     if wait_for_upload:
         upload_done_event.wait()
 
-    if tgt_ref in uploaded_image_refs_to_digests: # digest already present
+    if tgt_ref in uploaded_image_refs_to_digests:  # digest already present
         logger.info(f'{tgt_ref=} - was already uploaded by another rule - skipping')
         return uploaded_image_refs_to_digests[tgt_ref]
 
