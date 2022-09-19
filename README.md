@@ -3,9 +3,9 @@
 ## build & run docker container
 ```
 docker build -t cnudie-transport-tool
-docker run cnudie-transport-tool python3 /cnudie-transport-tool/ctt/process_dependencies.py --help
+docker run cnudie-transport-tool python3 /cnudie-transport-tool/main.py --help
 
-docker run --env CC_CONFIG_DIR=/cc-config-slim -v /Users/i500806/dev/cc-config-slim:/cc-config-slim -v $(pwd)/.vscode/test-cd.yaml:/test-cd.yaml  -v $(pwd)/.vscode/processing.cfg:/processing.cfg cnudie-transport-tool:0.0.1 python3 /cnudie-transport-tool/ctt/process_dependencies.py --tgt-ctx-repo-url <target context repo url> --component-descriptor /test-cd.yaml --processing-config /processing.cfg
+docker run --env CC_CONFIG_DIR=/cc-config-slim -v /Users/i500806/dev/cc-config-slim:/cc-config-slim -v $(pwd)/.vscode/test-cd.yaml:/test-cd.yaml  -v $(pwd)/.vscode/processing.cfg:/processing.cfg cnudie-transport-tool:0.0.1 python3 /cnudie-transport-tool/main.py --tgt-ctx-repo-url <target context repo url> --component-descriptor /test-cd.yaml --processing-config /processing.cfg
 ```
 
 ## run script outside of docker
@@ -17,7 +17,7 @@ docker run --env CC_CONFIG_DIR=/cc-config-slim -v /Users/i500806/dev/cc-config-s
 - set environment variables
   - `export CC_CONFIG_DIR=<path to cc-config repo>`
   - `export PYTHONPATH=<path to component-spec repo>/bindings-python:<path to cc-utils repo>:${PYTHONPATH}`
-- start the tool via `python3 ./ctt/process_dependencies.py <flags>`
+- start the tool via `python3 ./main.py <flags>`
 
 the tool allows passing in the input component descriptor via 2 ways:
 
@@ -37,4 +37,4 @@ the tool allows passing in the input component descriptor via 2 ways:
 
 additional mandatory flags are `--processing-config` and `--tgt-ctx-repo-url`
 
-for other flags, see the `main` function in `./ctt/process_dependencies.py`
+for other flags, see the `main` function in `./main.py`
