@@ -14,6 +14,7 @@ import cnudie.replicate
 import cnudie.retrieve
 import gci.componentmodel as cm
 import oci
+import oci.platform as op
 import product.v2
 import yaml
 
@@ -60,6 +61,19 @@ def main():
                         ],
                         default=oci.ReplicationMode.PREFER_MULTIARCH
                         )
+    parser.add_argument('--included-platforms',
+                        help=f'''list of platforms that should be copied for multiarch images. 
+if the flag is omitted, every platform is copied.
+each list item must be an expression in the format os/architecture[/variant].
+
+allowed values for os: {["*"] + [o.value for o in op.OperatingSystem]}
+allowed values for architecture: {["*"] + [a.value for a in op.Architecture]}
+              
+if the variant is omitted, every variant will be copied.
+''',
+                        nargs='*',
+                        )
+
 
     parsed = parser.parse_args()
 
@@ -92,6 +106,12 @@ def main():
     else:
         processing_mode = ctt.process_dependencies.ProcessingMode.REGULAR
 
+    platform_filter = None
+    if parsed.included_platforms:
+        platform_filter = op.PlatformFilter.create(
+            included_platforms=parsed.included_platforms,
+        )
+
     print(f'will now copy/patch specified component-descriptor to {tgt_ctx_repo_url=}')
 
     bom_resources: typing.Sequence[BOMEntry] = []
@@ -110,6 +130,7 @@ def main():
         cosign_repository=parsed.cosign_repository,
         signing_server_url=parsed.signing_server_url,
         root_ca_cert_path=parsed.root_ca_cert,
+        platform_filter=platform_filter,
         bom_resources=bom_resources,
     )
 
