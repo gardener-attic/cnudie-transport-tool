@@ -19,6 +19,7 @@ import product.v2
 import yaml
 
 from ctt.rbsc_bom import BOMEntry, buildAndApplyBOM
+import ctt.platform as platform
 import ctt.process_dependencies
 
 def main():
@@ -66,8 +67,8 @@ def main():
 if the flag is omitted, every platform is copied.
 each list item must be an expression in the format os/architecture[/variant].
 
-allowed values for os: {["*"] + [o.value for o in op.OperatingSystem]}
-allowed values for architecture: {["*"] + [a.value for a in op.Architecture]}
+allowed values for os: {["*"] + [o.value for o in platform.OperatingSystem]}
+allowed values for architecture: {["*"] + [a.value for a in platform.Architecture]}
               
 if the variant is omitted, every variant will be copied.
 ''',
