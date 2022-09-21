@@ -316,8 +316,13 @@ def process_upload_request(
     # most common case: tgt has not yet been processed - process and afterwards signal
     # other threads waiting for upload result that result is ready be setting the event
 
+    accept = replication_mode.accept_header()
     oci_client = ccc.oci.oci_client()
-    manifest_blob_ref = oci_client.head_manifest(image_reference=tgt_ref, absent_ok=True)
+    manifest_blob_ref = oci_client.head_manifest(
+        image_reference=tgt_ref,
+        absent_ok=True,
+        accept=accept,
+    )
     if bool(manifest_blob_ref) and upload_mode_images is product.v2.UploadMode.SKIP:
         logger.info(f'{tgt_ref=} exists - skipping processing')
 
@@ -473,8 +478,16 @@ def process_images(
                 # same signature already exists there. therefore, check if the exact same signature already exists
                 signature_exists = False
 
+                # accept header should not be needed here as we are referencing the manifest via digest.
+                # but set just for safety reasons.
+                accept = replication_mode.accept_header()
                 oci_client = ccc.oci.oci_client()
-                manifest_blob_ref = oci_client.head_manifest(image_reference=cosign_sig_ref, absent_ok=True)
+                manifest_blob_ref = oci_client.head_manifest(
+                    image_reference=cosign_sig_ref,
+                    absent_ok=True,
+                    accept=accept,
+                )
+
                 if bool(manifest_blob_ref):
                     cosign_sig_manifest = oci_client.manifest(cosign_sig_ref)
                     for layer in cosign_sig_manifest.layers:
@@ -490,6 +503,8 @@ def process_images(
                         signature=signature.encode(),
                         cosign_repository=cosign_repository,
                     )
+                else:
+                    logger.info(f'{digest_ref=} - signature for manifest already exists - skipping signature upload')
 
             if replace_resource_tags_with_digests:
                 processing_job.upload_request = dataclasses.replace(
