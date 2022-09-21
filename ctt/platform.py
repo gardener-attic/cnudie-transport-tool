@@ -79,8 +79,8 @@ class PlatformFilter:
                 os, architecture, variant = splitted
             case _:
                 raise ValueError(f'{platform_expr=} - invalid length {len(splitted)} of splitted'
-                    ' oci platform expression. must be either 2 or 3. expression must have the'
-                    ' format os/architecture[/variant]')
+                    ' oci platform expression. length must be either 2 or 3. please check that the'
+                    ' expression has the format os/architecture[/variant]')
 
         if os != '*': OperatingSystem(os)
         if architecture != '*': Architecture(architecture)
