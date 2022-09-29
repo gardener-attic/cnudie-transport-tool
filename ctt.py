@@ -6,6 +6,7 @@
 
 import argparse
 import dataclasses
+import textwrap
 import typing
 
 
@@ -63,15 +64,16 @@ def main():
                         default=oci.ReplicationMode.PREFER_MULTIARCH
                         )
     parser.add_argument('--included-platforms',
-                        help=f'''list of platforms that should be copied for multiarch images. 
-if the flag is omitted, every platform is copied.
-each list item must be an expression in the format os/architecture[/variant].
-
-allowed values for os: {["*"] + [o.value for o in platform.OperatingSystem]}
-allowed values for architecture: {["*"] + [a.value for a in platform.Architecture]}
+                        help=textwrap.dedent(f'''
+                            list of platforms that should be copied for multiarch images. 
+                            if the flag is omitted, every platform is copied. each list item
+                            must be an expression in the format os/architecture[/variant].
+                            allowed values for os: {[o.value for o in platform.OperatingSystem]}
+                            allowed values for architecture: {[a.value for a in platform.Architecture]}
               
-if the variant is omitted, every variant will be copied.
-''',
+                            if the variant is omitted, every variant will be copied.
+                            '''
+                        ),
                         nargs='*',
                         )
 
@@ -113,6 +115,9 @@ if the variant is omitted, every variant will be copied.
             included_platforms=parsed.included_platforms,
         )
 
+    if parsed.rbsc_git_url and not parsed.rbsc_git_branch:
+        raise ValueError('Please provide --rbsc-git-branch when using --rbsc-git-url')
+
     print(f'will now copy/patch specified component-descriptor to {tgt_ctx_repo_url=}')
 
     bom_resources: typing.Sequence[BOMEntry] = []
@@ -144,8 +149,6 @@ if the variant is omitted, every variant will be copied.
             )
 
     if parsed.rbsc_git_url:
-        if not parsed.rbsc_git_branch:
-            raise ValueError('Please provide --rbsc-git-branch when using --rbsc-git-url')
         buildAndApplyBOM(
             parsed.rbsc_git_url,
             parsed.rbsc_git_branch,

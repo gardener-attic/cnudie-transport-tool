@@ -12,6 +12,7 @@ class OperatingSystem(enum.Enum):
     OperatingSystem contains the values for the 'os' property in an oci multiarch image.
     See https://go.dev/doc/install/source#environment.
     '''
+    ANY = '*'
     AIX = 'aix'
     ANDROID = 'android'
     DARWIN = 'darwin'
@@ -33,8 +34,9 @@ class Architecture(enum.Enum):
     Architecture contains the values for the 'architecture' property in an oci multiarch image.
     See https://go.dev/doc/install/source#environment.
     '''
+    ANY = '*'
     PPC64 = 'ppc64'
-    _386 = '386'
+    I386 = '386'
     AMD64 = 'amd64'
     ARM = 'arm'
     ARM64 = 'arm64'
@@ -59,9 +61,9 @@ class PlatformFilter:
         def filter(platform_to_match: om.OciPlatform) -> bool:
             for m in matchers:
                 normalised_p = normalise(platform_to_match)
-                if ((m['os'] == '*' or m['os'] == normalised_p.os) and
-                    (m['architecture'] == '*' or m['architecture'] == normalised_p.architecture) and
-                    (m['variant'] == '*' or m['variant'] == normalised_p.variant)):
+                if ((m.os == '*' or m.os == normalised_p.os) and
+                    (m.architecture == '*' or m.architecture == normalised_p.architecture) and
+                    (m.variant == '*' or m.variant == normalised_p.variant)):
                     return True
 
             return False
@@ -69,27 +71,25 @@ class PlatformFilter:
         return filter
 
     @staticmethod
-    def _parse_expr(platform_expr: str) -> dict:
-        splitted = platform_expr.split('/')
-        match len(splitted):
-            case 2:
-                os, architecture = splitted
+    def _parse_expr(platform_expr: str) -> om.OciPlatform:
+        match platform_expr.split('/'):
+            case os, architecture, variant: pass
+            case os, architecture:
                 variant = '*'
-            case 3:
-                os, architecture, variant = splitted
             case _:
-                raise ValueError(f'{platform_expr=} - invalid length {len(splitted)} of splitted'
-                    ' oci platform expression. length must be either 2 or 3. please check that the'
-                    ' expression has the format os/architecture[/variant]')
+                raise ValueError(f'{platform_expr=} - invalid length {len(platform_expr.split("/"))}'
+                    ' of splitted oci platform expression. length must be either 2 or 3. please check'
+                    ' that the expression has the format os/architecture[/variant]')
 
-        if os != '*': OperatingSystem(os)
-        if architecture != '*': Architecture(architecture)
+        # check if values are valid
+        OperatingSystem(os)
+        Architecture(architecture)
 
-        return {
-            'os': os,
-            'architecture': architecture,
-            'variant': variant,
-        }
+        return om.OciPlatform(
+            os=os,
+            architecture=architecture,
+            variant=variant,
+        )
 
 
 def normalise(p: om.OciPlatform):
@@ -107,12 +107,12 @@ def normalise_os(os: str) -> str:
     '''
     https://github.com/containerd/containerd/blob/8686ededfc90076914c5238eb96c883ea093a8ba/platforms/database.go#L69
     '''
-    os = os or ''
+    if not os:
+        raise ValueError('os is empty')
 
     os = os.lower()
-    match os:
-        case "macos":
-            os = "darwin"
+    if os == 'macos':
+        os = 'darwin'
 
     return os
 
@@ -121,33 +121,34 @@ def normalise_arch(arch: str, variant: str) -> typing.Tuple:
     '''
     https://github.com/containerd/containerd/blob/8686ededfc90076914c5238eb96c883ea093a8ba/platforms/database.go#L83
     '''
-    arch = arch or ''
-    variant = variant or ''
+    if not arch:
+        raise ValueError('architecture is empty')
 
+    variant = variant or ''
     arch, variant = arch.lower(), variant.lower()
     match arch:
-        case "i386":
-            arch = "386"
-            variant = ""
-        case "x86_64", "x86-64":
-            arch = "amd64"
-            variant = ""
-        case "aarch64", "arm64":
-            arch = "arm64"
+        case 'i386':
+            arch = '386'
+            variant = ''
+        case 'x86_64', 'x86-64':
+            arch = 'amd64'
+            variant = ''
+        case 'aarch64', 'arm64':
+            arch = 'arm64'
             match variant:
-                case "8", "v8":
-                    variant = ""
-        case "armhf":
-            arch = "arm"
-            variant = "v7"
-        case "armel":
-            arch = "arm"
-            variant = "v6"
-        case "arm":
+                case '8', 'v8':
+                    variant = ''
+        case 'armhf':
+            arch = 'arm'
+            variant = 'v7'
+        case 'armel':
+            arch = 'arm'
+            variant = 'v6'
+        case 'arm':
             match variant:
-                case "", "7":
-                    variant = "v7"
-                case "5", "6", "8":
-                    variant = "v" + variant
+                case '', '7':
+                    variant = 'v7'
+                case '5', '6', '8':
+                    variant = 'v' + variant
 
-    return (arch, variant)
+    return arch, variant
