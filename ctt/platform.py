@@ -108,7 +108,7 @@ def normalise_os(os: str) -> str:
     https://github.com/containerd/containerd/blob/8686ededfc90076914c5238eb96c883ea093a8ba/platforms/database.go#L69
     '''
     if not os:
-        raise ValueError('os is empty')
+        raise ValueError(os)
 
     os = os.lower()
     if os == 'macos':
@@ -122,7 +122,7 @@ def normalise_arch(arch: str, variant: str) -> typing.Tuple:
     https://github.com/containerd/containerd/blob/8686ededfc90076914c5238eb96c883ea093a8ba/platforms/database.go#L83
     '''
     if not arch:
-        raise ValueError('architecture is empty')
+        raise ValueError(arch)
 
     variant = variant or ''
     arch, variant = arch.lower(), variant.lower()
