@@ -15,7 +15,6 @@ import cnudie.replicate
 import cnudie.retrieve
 import gci.componentmodel as cm
 import oci
-import oci.platform as op
 import product.v2
 import yaml
 
@@ -68,9 +67,8 @@ def main():
                             list of platforms that should be copied for multiarch images. 
                             if the flag is omitted, every platform is copied. each list item
                             must be an expression in the format os/architecture[/variant].
-                            allowed values for os: {[o.value for o in platform.OperatingSystem]}
-                            allowed values for architecture: {[a.value for a in platform.Architecture]}
-              
+                            allowed values for os: {[o.value for o in platform.OperatingSystem]}.
+                            allowed values for architecture: {[a.value for a in platform.Architecture]}.            
                             if the variant is omitted, every variant will be copied.
                             '''
                         ),
@@ -111,7 +109,7 @@ def main():
 
     platform_filter = None
     if parsed.included_platforms:
-        platform_filter = op.PlatformFilter.create(
+        platform_filter = platform.PlatformFilter.create(
             included_platforms=parsed.included_platforms,
         )
 
