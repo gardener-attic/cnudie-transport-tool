@@ -4,7 +4,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import argparse
 import concurrent.futures
 import dataclasses
 import enum
@@ -24,6 +23,7 @@ import container.util
 import cosign.payload as cp
 import gci.componentmodel as cm
 import oci
+import oci.model as om
 import product.v2
 import yaml
 
@@ -31,7 +31,7 @@ import ctt.cosign as cosign
 import ctt.filters as filters
 import ctt.processing_model as processing_model
 import ctt.processors as processors
-from ctt.rbsc_bom import BOMEntry, BOMEntryType, buildAndApplyBOM
+from ctt.rbsc_bom import BOMEntry, BOMEntryType
 import ctt.uploaders as uploaders
 import ctt.util as ctt_util
 
@@ -40,8 +40,6 @@ original_tag_label_name = 'cloud.gardener.cnudie/migration/original_tag'
 logger = logging.getLogger(__name__)
 
 own_dir = os.path.abspath(os.path.dirname(__file__))
-
-bom_resources: typing.Sequence[BOMEntry] = []
 
 
 class ProcessingMode(enum.Enum):
@@ -289,6 +287,7 @@ def process_upload_request(
     upload_request: processing_model.ContainerImageUploadRequest,
     upload_mode_images=product.v2.UploadMode.SKIP,
     replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
+    platform_filter: typing.Callable[[om.OciPlatform], bool]=None,
 ) -> str:
     global uploaded_image_refs_to_digests
     global uploaded_image_refs_to_ready_events
@@ -339,6 +338,7 @@ def process_upload_request(
         target_ref=tgt_ref,
         remove_files=upload_request.remove_files,
         mode=replication_mode,
+        platform_filter=platform_filter,
     )
 
     logger.info(f'finished processing {src_ref} -> {tgt_ref=}')
@@ -419,6 +419,8 @@ def process_images(
     cosign_repository=None,
     signing_server_url=None,
     root_ca_cert_path=None,
+    platform_filter: typing.Callable[[om.OciPlatform], bool]=None,
+    bom_resources: typing.Sequence[BOMEntry]=[]
 ):
     logger.info(pprint.pformat(locals()))
 
@@ -454,6 +456,7 @@ def process_images(
                 upload_request=processing_job.upload_request,
                 upload_mode_images=upload_mode_images,
                 replication_mode=replication_mode,
+                platform_filter=platform_filter,
             )
 
             if not docker_content_digest:
@@ -675,115 +678,3 @@ def process_images(
         component_descriptor_v2,
         component=original_comp[0],  # safe, because we check for leng above
     )
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--component-descriptor')
-    parser.add_argument('-p', '--processing-config', required=True)
-    parser.add_argument('-d', '--dry-run', action='store_true')
-    parser.add_argument('-t', '--tgt-ctx-repo-url', required=True)
-    parser.add_argument('-s', '--src-ctx-repo-url')
-    parser.add_argument('-n', '--component-name')
-    parser.add_argument('-v', '--component-version')
-    parser.add_argument('-l', '--skip-cd-validation', action='store_true')
-    parser.add_argument('-g', '--rbsc-git-url')
-    parser.add_argument('-b', '--rbsc-git-branch')
-    parser.add_argument('--generate-cosign-signatures', action='store_true',
-                        help='generate cosign signatures for copied oci image resources')
-    parser.add_argument('--cosign-repository', help='oci repository where cosign signatures should be stored')
-    parser.add_argument('--signing-server-url', help='url of the signing server which is used for generating cosign signatures')
-    parser.add_argument('--root-ca-cert', help='''path to a file which contains the root ca cert in pem format for verifying
- the signing server tls certificate''')
-    parser.add_argument('-u', '--upload-mode-cd',
-                        choices=[
-                            mode.value for _, mode in product.v2.UploadMode.__members__.items()
-                        ],
-                        default=product.v2.UploadMode.SKIP.value
-                        )
-    parser.add_argument('-i', '--upload-mode-images',
-                        choices=[
-                            mode.value for _, mode in product.v2.UploadMode.__members__.items()
-                        ],
-                        default=product.v2.UploadMode.SKIP.value
-                        )
-    parser.add_argument('-r', '--replace-resource-tags-with-digests', action='store_true',
-                        help='replace tags with digests for resources that are accessed via OCI references'
-                        )
-    parser.add_argument('--replication-mode',
-                        help='replication mode for OCI resources',
-                        choices=[
-                            mode.value for _, mode in oci.ReplicationMode.__members__.items()
-                        ],
-                        default=oci.ReplicationMode.PREFER_MULTIARCH
-                        )
-
-    parsed = parser.parse_args()
-
-    if parsed.component_descriptor:
-        component_descriptor = cm.ComponentDescriptor.from_dict(
-            ci.util.parse_yaml_file(parsed.component_descriptor)
-        )
-    elif parsed.src_ctx_repo_url and parsed.component_name and parsed.component_version:
-        src_ctx_repo_url = parsed.src_ctx_repo_url
-        component_descriptor = cnudie.retrieve.component_descriptor(
-            ctx_repo_url=parsed.src_ctx_repo_url,
-            name=parsed.component_name,
-            version=parsed.component_version,
-        )
-
-        if component_descriptor.component.current_repository_ctx().baseUrl != src_ctx_repo_url:
-            component_descriptor.component.repositoryContexts.append(
-                cm.OciRepositoryContext(
-                    baseUrl=src_ctx_repo_url,
-                    type=cm.AccessType.OCI_REGISTRY,
-                ),
-            )
-    else:
-        raise RuntimeError('you must either set --component-descriptor, or --src-ctx-repo-url, --component-name, and --component-version')
-
-    tgt_ctx_repo_url = parsed.tgt_ctx_repo_url
-
-    if parsed.dry_run:
-        processing_mode = ProcessingMode.DRY_RUN
-    else:
-        processing_mode = ProcessingMode.REGULAR
-
-    print(f'will now copy/patch specified component-descriptor to {tgt_ctx_repo_url=}')
-
-    component_descriptor_v2 = process_images(
-        parsed.processing_config,
-        component_descriptor_v2=component_descriptor,
-        tgt_ctx_base_url=tgt_ctx_repo_url,
-        processing_mode=processing_mode,
-        upload_mode_cd=product.v2.UploadMode(parsed.upload_mode_cd),
-        upload_mode_images=product.v2.UploadMode(parsed.upload_mode_images),
-        replication_mode=oci.ReplicationMode(parsed.replication_mode),
-        replace_resource_tags_with_digests=parsed.replace_resource_tags_with_digests,
-        skip_cd_validation=parsed.skip_cd_validation,
-        generate_cosign_signatures=parsed.generate_cosign_signatures,
-        cosign_repository=parsed.cosign_repository,
-        signing_server_url=parsed.signing_server_url,
-        root_ca_cert_path=parsed.root_ca_cert,
-    )
-
-    if parsed.component_descriptor:
-        with open(parsed.component_descriptor, 'w') as f:
-            yaml.dump(
-                data=dataclasses.asdict(component_descriptor_v2),
-                stream=f,
-                Dumper=cm.EnumValueYamlDumper,
-            )
-
-    if parsed.rbsc_git_url:
-        if not parsed.rbsc_git_branch:
-            raise ValueError('Please provide --rbsc-git-branch when using --rbsc-git-url')
-        buildAndApplyBOM(
-            parsed.rbsc_git_url,
-            parsed.rbsc_git_branch,
-            bom_resources,
-        )
-
-
-if __name__ == '__main__':
-    main()
