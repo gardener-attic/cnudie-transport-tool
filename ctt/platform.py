@@ -7,6 +7,7 @@ import typing
 
 import oci.model as om
 
+
 class OperatingSystem(enum.Enum):
     '''
     OperatingSystem contains the values for the 'os' property in an oci multiarch image.
@@ -56,14 +57,14 @@ class PlatformFilter:
     def create(
         included_platforms: typing.List[str],
     ) -> typing.Callable[[om.OciPlatform], bool]:
-        matchers = [PlatformFilter._parse_expr(included_platform) for included_platform in included_platforms ]
+        matchers = [PlatformFilter._parse_expr(included_platform) for included_platform in included_platforms]
 
         def filter(platform_to_match: om.OciPlatform) -> bool:
             for m in matchers:
                 normalised_p = normalise(platform_to_match)
                 if ((m.os == '*' or m.os == normalised_p.os) and
-                    (m.architecture == '*' or m.architecture == normalised_p.architecture) and
-                    (m.variant == '*' or m.variant == normalised_p.variant)):
+                        (m.architecture == '*' or m.architecture == normalised_p.architecture) and
+                        (m.variant == '*' or m.variant == normalised_p.variant)):
                     return True
 
             return False
@@ -77,9 +78,11 @@ class PlatformFilter:
             case os, architecture:
                 variant = '*'
             case _:
-                raise ValueError(f'{platform_expr=} - invalid length {len(platform_expr.split("/"))}'
+                raise ValueError(
+                    f'{platform_expr=} - invalid length {len(platform_expr.split("/"))}'
                     ' of splitted oci platform expression. length must be either 2 or 3. please check'
-                    ' that the expression has the format os/architecture[/variant]')
+                    ' that the expression has the format os/architecture[/variant]'
+                )
 
         # check if values are valid
         OperatingSystem(os)

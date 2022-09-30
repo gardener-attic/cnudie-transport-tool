@@ -17,6 +17,7 @@ import oci.model as om
 
 import ctt.platform as platform
 
+
 def test_platform_filter():
     filter_func = platform.PlatformFilter.create(
         included_platforms=[
@@ -28,20 +29,20 @@ def test_platform_filter():
         os='linux',
         architecture='amd64',
     ))
-    assert matches == True
+    assert matches is True
 
     matches = filter_func(om.OciPlatform(
         os='linux',
         architecture='arm64',
         variant='v6',
     ))
-    assert matches == True
+    assert matches is True
 
     matches = filter_func(om.OciPlatform(
         os='darwin',
         architecture='arm64',
     ))
-    assert matches == False
+    assert matches is False
 
     filter_func = platform.PlatformFilter.create(
         included_platforms=[
@@ -53,13 +54,13 @@ def test_platform_filter():
         os='linux',
         architecture='arm64',
     ))
-    assert matches == True
+    assert matches is True
 
     matches = filter_func(om.OciPlatform(
         os='linux',
         architecture='amd64',
     ))
-    assert matches == False
+    assert matches is False
 
     filter_func = platform.PlatformFilter.create(
         included_platforms=[
@@ -72,14 +73,14 @@ def test_platform_filter():
         architecture='arm64',
         variant='v7',
     ))
-    assert matches == True
+    assert matches is True
 
     matches = filter_func(om.OciPlatform(
         os='linux',
         architecture='arm64',
         variant='v6',
     ))
-    assert matches == False
+    assert matches is False
 
     filter_func = platform.PlatformFilter.create(
         included_platforms=[
@@ -92,11 +93,11 @@ def test_platform_filter():
         architecture='arm64',
         variant='v7',
     ))
-    assert matches == True
+    assert matches is True
 
     matches = filter_func(om.OciPlatform(
         os='ios',
         architecture='arm',
         variant='v7',
     ))
-    assert matches == False
+    assert matches is False

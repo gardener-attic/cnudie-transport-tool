@@ -287,7 +287,7 @@ def process_upload_request(
     upload_request: processing_model.ContainerImageUploadRequest,
     upload_mode_images=product.v2.UploadMode.SKIP,
     replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
-    platform_filter: typing.Callable[[om.OciPlatform], bool]=None,
+    platform_filter: typing.Callable[[om.OciPlatform], bool] = None,
 ) -> str:
     global uploaded_image_refs_to_digests
     global uploaded_image_refs_to_ready_events
@@ -419,8 +419,8 @@ def process_images(
     cosign_repository=None,
     signing_server_url=None,
     root_ca_cert_path=None,
-    platform_filter: typing.Callable[[om.OciPlatform], bool]=None,
-    bom_resources: typing.Sequence[BOMEntry]=[]
+    platform_filter: typing.Callable[[om.OciPlatform], bool] = None,
+    bom_resources: typing.Sequence[BOMEntry] = []
 ):
     logger.info(pprint.pformat(locals()))
 

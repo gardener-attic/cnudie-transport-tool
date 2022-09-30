@@ -9,7 +9,6 @@ import dataclasses
 import textwrap
 import typing
 
-
 import ci.util
 import cnudie.replicate
 import cnudie.retrieve
@@ -21,6 +20,7 @@ import yaml
 from ctt.rbsc_bom import BOMEntry, buildAndApplyBOM
 import ctt.platform as platform
 import ctt.process_dependencies
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -64,17 +64,15 @@ def main():
                         )
     parser.add_argument('--included-platforms',
                         help=textwrap.dedent(f'''
-                            list of platforms that should be copied for multiarch images. 
+                            list of platforms that should be copied for multiarch images.
                             if the flag is omitted, every platform is copied. each list item
                             must be an expression in the format os/architecture[/variant].
                             allowed values for os: {[o.value for o in platform.OperatingSystem]}.
-                            allowed values for architecture: {[a.value for a in platform.Architecture]}.            
+                            allowed values for architecture: {[a.value for a in platform.Architecture]}.
                             if the variant is omitted, every variant will be copied.
-                            '''
-                        ),
+                            '''),
                         nargs='*',
                         )
-
 
     parsed = parser.parse_args()
 
