@@ -80,13 +80,21 @@ def main():
         component_descriptor = cm.ComponentDescriptor.from_dict(
             ci.util.parse_yaml_file(parsed.component_descriptor)
         )
+        component_descriptor_lookup = cnudie.retrieve.create_default_component_descriptor_lookup(
+            default_ctx_repo=component_descriptor.component.current_repository_ctx(),
+        )
     elif parsed.src_ctx_repo_url and parsed.component_name and parsed.component_version:
         src_ctx_repo_url = parsed.src_ctx_repo_url
-        component_descriptor = cnudie.retrieve.component_descriptor(
-            ctx_repo_url=parsed.src_ctx_repo_url,
+        ctx_repo = cm.OciRepositoryContext(
+            baseUrl=src_ctx_repo_url,
+        )
+        component_descriptor_lookup = cnudie.retrieve.create_default_component_descriptor_lookup(
+            default_ctx_repo=ctx_repo,
+        )
+        component_descriptor = component_descriptor_lookup(cm.ComponentIdentity(
             name=parsed.component_name,
             version=parsed.component_version,
-        )
+        ))
 
         if component_descriptor.component.current_repository_ctx().baseUrl != src_ctx_repo_url:
             component_descriptor.component.repositoryContexts.append(
@@ -134,6 +142,7 @@ def main():
         root_ca_cert_path=parsed.root_ca_cert,
         platform_filter=platform_filter,
         bom_resources=bom_resources,
+        component_descriptor_lookup=component_descriptor_lookup,
     )
 
     if parsed.component_descriptor:
