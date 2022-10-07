@@ -63,13 +63,12 @@ def main():
                         default=oci.ReplicationMode.PREFER_MULTIARCH
                         )
     parser.add_argument('--included-platforms',
-                        help=textwrap.dedent(f'''
+                        help=textwrap.dedent('''
                             list of platforms that should be copied for multiarch images.
                             if the flag is omitted, every platform is copied. each list item
-                            must be an expression in the format os/architecture[/variant].
-                            allowed values for os: {[o.value for o in platform.OperatingSystem]}.
-                            allowed values for architecture: {[a.value for a in platform.Architecture]}.
-                            if the variant is omitted, every variant will be copied.
+                            must be a regex in the format os/architecture/variant.
+                            allowed values for os and architecture can be found here:
+                            https://go.dev/doc/install/source#environment.
                             '''),
                         nargs='*',
                         )

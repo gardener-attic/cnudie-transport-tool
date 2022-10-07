@@ -21,7 +21,7 @@ import ctt.platform as platform
 def test_platform_filter():
     filter_func = platform.PlatformFilter.create(
         included_platforms=[
-            'linux/*',
+            'linux/.*',
         ],
     )
 
@@ -58,6 +58,13 @@ def test_platform_filter():
 
     matches = filter_func(om.OciPlatform(
         os='linux',
+        architecture='arm64',
+        variant='v7',
+    ))
+    assert matches is False
+
+    matches = filter_func(om.OciPlatform(
+        os='linux',
         architecture='amd64',
     ))
     assert matches is False
@@ -84,7 +91,7 @@ def test_platform_filter():
 
     filter_func = platform.PlatformFilter.create(
         included_platforms=[
-            '*/arm64/*',
+            '.*/arm64/.*',
         ],
     )
 
