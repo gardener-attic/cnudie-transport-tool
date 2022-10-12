@@ -431,6 +431,7 @@ def process_images(
     platform_filter: typing.Callable[[om.OciPlatform], bool] = None,
     bom_resources: typing.Sequence[BOMEntry] = [],
     component_descriptor_lookup: cnudie.retrieve.ComponentDescriptorLookupById = None,
+    skip_component_upload: typing.Callable[[cm.Component], bool] = None,
 ):
     logger.info(pprint.pformat(locals()))
 
@@ -614,6 +615,9 @@ def process_images(
 
     # publish the (patched) component-descriptors
     def reupload_component(component: cm.Component):
+        if skip_component_upload and skip_component_upload(component):
+            return
+
         component_descriptor = dataclasses.replace(
             component_descriptor_v2,
             component=component,
