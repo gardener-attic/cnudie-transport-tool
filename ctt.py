@@ -34,44 +34,64 @@ def main():
     parser.add_argument('-l', '--skip-cd-validation', action='store_true')
     parser.add_argument('-g', '--rbsc-git-url')
     parser.add_argument('-b', '--rbsc-git-branch')
-    parser.add_argument('--generate-cosign-signatures', action='store_true',
-                        help='generate cosign signatures for copied oci image resources')
-    parser.add_argument('--cosign-repository', help='oci repository where cosign signatures should be stored')
-    parser.add_argument('--signing-server-url', help='url of the signing server which is used for generating cosign signatures')
-    parser.add_argument('--root-ca-cert', help='''path to a file which contains the root ca cert in pem format for verifying
- the signing server tls certificate''')
-    parser.add_argument('-u', '--upload-mode-cd',
-                        choices=[
-                            mode.value for _, mode in product.v2.UploadMode.__members__.items()
-                        ],
-                        default=product.v2.UploadMode.SKIP.value
-                        )
-    parser.add_argument('-i', '--upload-mode-images',
-                        choices=[
-                            mode.value for _, mode in product.v2.UploadMode.__members__.items()
-                        ],
-                        default=product.v2.UploadMode.SKIP.value
-                        )
-    parser.add_argument('-r', '--replace-resource-tags-with-digests', action='store_true',
-                        help='replace tags with digests for resources that are accessed via OCI references'
-                        )
-    parser.add_argument('--replication-mode',
-                        help='replication mode for OCI resources',
-                        choices=[
-                            mode.value for _, mode in oci.ReplicationMode.__members__.items()
-                        ],
-                        default=oci.ReplicationMode.PREFER_MULTIARCH
-                        )
-    parser.add_argument('--included-platforms',
-                        help=textwrap.dedent('''
-                            list of platforms that should be copied for multiarch images.
-                            if the flag is omitted, every platform is copied. each list item
-                            must be a regex in the format os/architecture/variant.
-                            allowed values for os and architecture can be found here:
-                            https://go.dev/doc/install/source#environment.
-                            '''),
-                        nargs='*',
-                        )
+    parser.add_argument(
+        '--generate-cosign-signatures',
+        action='store_true',
+        help='generate cosign signatures for copied oci image resources'
+    )
+    parser.add_argument(
+        '--cosign-repository',
+        help='oci repository where cosign signatures should be stored'
+    )
+    parser.add_argument(
+        '--signing-server-url',
+        help='url of the signing server which is used for generating cosign signatures'
+    )
+    parser.add_argument(
+        '--root-ca-cert',
+        help=textwrap.dedent('''\
+            path to a file which contains the root ca cert in pem format for verifying
+            the signing server tls certificate'''
+        ),
+    )
+    parser.add_argument(
+        '-u', '--upload-mode-cd',
+        choices=[
+            mode.value for _, mode in product.v2.UploadMode.__members__.items()
+        ],
+        default=product.v2.UploadMode.SKIP.value,
+    )
+    parser.add_argument(
+        '-i', '--upload-mode-images',
+        choices=[
+            mode.value for _, mode in product.v2.UploadMode.__members__.items()
+        ],
+        default=product.v2.UploadMode.SKIP.value,
+    )
+    parser.add_argument(
+        '-r', '--replace-resource-tags-with-digests',
+        action='store_true',
+        help='replace tags with digests for resources that are accessed via OCI references',
+    )
+    parser.add_argument(
+        '--replication-mode',
+        help='replication mode for OCI resources',
+        choices=[
+            mode.value for _, mode in oci.ReplicationMode.__members__.items()
+        ],
+        default=oci.ReplicationMode.PREFER_MULTIARCH,
+    )
+    parser.add_argument(
+        '--included-platforms',
+        help=textwrap.dedent('''
+            list of platforms that should be copied for multiarch images.
+            if the flag is omitted, every platform is copied. each list item
+            must be a regex in the format os/architecture/variant.
+            allowed values for os and architecture can be found here:
+            https://go.dev/doc/install/source#environment.
+            '''),
+        nargs='*',
+    )
 
     parsed = parser.parse_args()
 
@@ -103,7 +123,9 @@ def main():
                 ),
             )
     else:
-        raise RuntimeError('you must either set --component-descriptor, or --src-ctx-repo-url, --component-name, and --component-version')
+        raise RuntimeError(
+            'either set --component-descriptor, or all of --src-ctx-repo-url, --component-name, --component-version'
+        )
 
     tgt_ctx_repo_url = parsed.tgt_ctx_repo_url
 
