@@ -10,6 +10,7 @@ import enum
 import hashlib
 import itertools
 import json
+import jsonschema
 import logging
 import os
 import pprint
@@ -644,6 +645,11 @@ def process_images(
 
             try:
                 cm.ComponentDescriptor.validate(raw, validation_mode=cm.ValidationMode.FAIL)
+            except jsonschema.exceptions.RefResolutionError as rre:
+                logger.warning(
+                    'error whilst resolving reference from json-schema (see below) - will ignore'
+                )
+                print(rre)
             except Exception as e:
                 c = component_descriptor.component
                 component_id = f'{c.name}:{c.version}'
