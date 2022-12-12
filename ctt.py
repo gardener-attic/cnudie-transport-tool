@@ -52,7 +52,7 @@ def main():
         help=textwrap.dedent('''\
             path to a file which contains the root ca cert in pem format for verifying
             the signing server tls certificate'''
-        ),
+            ),
     )
     parser.add_argument(
         '-u', '--upload-mode-cd',
