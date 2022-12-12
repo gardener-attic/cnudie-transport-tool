@@ -5,6 +5,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import dataclasses
+import enum
+import json
 import requests
 import typing
 
@@ -25,6 +27,13 @@ def add_label(
         return src_labels + [
             label,
         ]
+
+
+class EnumJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, enum.Enum):
+            return o.value
+        return super().default(o)
 
 
 @dataclasses.dataclass

@@ -9,6 +9,7 @@ import dataclasses
 import enum
 import hashlib
 import itertools
+import json
 import logging
 import os
 import pprint
@@ -25,7 +26,6 @@ import gci.componentmodel as cm
 import oci
 import oci.model as om
 import product.v2
-import yaml
 
 import ctt.cosign as cosign
 import ctt.filters as filters
@@ -625,13 +625,32 @@ def process_images(
 
         # Validate the patched component-descriptor and exit on fail
         if not skip_cd_validation:
+            # ensure component-descriptor is json-serialisable
+            raw = dataclasses.asdict(component_descriptor)
             try:
-                dict_cd = yaml.safe_load(yaml.dump(data=dataclasses.asdict(component_descriptor), Dumper=cm.EnumValueYamlDumper))
-                cm.ComponentDescriptor.validate(dict_cd, validation_mode=cm.ValidationMode.FAIL)
+                raw_json = json.dumps(raw, cls=ctt_util.EnumJSONEncoder)
             except Exception as e:
-                logger.error(f'Schema validation for component-descriptor '
-                             f'{component_descriptor.component.name}:{component_descriptor.component.version} failed with {e}')
-                raise e
+                logger.error(
+                    f'Component-Descriptor could not be json-serialised: {e}'
+                )
+                raise
+            try:
+                raw = json.loads(raw_json)
+            except Exception as e:
+                logger.error(
+                    f'Component-Descriptor could not be deserialised: {e}'
+                )
+                raise
+
+            try:
+                cm.ComponentDescriptor.validate(raw, validation_mode=cm.ValidationMode.FAIL)
+            except Exception as e:
+                c = component_descriptor.component
+                component_id = f'{c.name}:{c.version}'
+                logger.error(
+                    f'Schema validation for component-descriptor {component_id} failed with {e}'
+                )
+                raise
 
         src_ctx_repo_base_url = component_descriptor.component.repositoryContexts[-2].baseUrl
         if processing_mode is ProcessingMode.REGULAR:
