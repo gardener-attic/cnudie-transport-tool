@@ -21,7 +21,6 @@ def test_labels_with_migration_hint_doesnt_overwrite_original_ref():
         version='1.0.0',
         type=cm.ResourceType.OCI_IMAGE,
         access=cm.OciAccess(
-            cm.AccessType.OCI_REGISTRY,
             imageReference='target-repo.com/my-image:1.0.0',
         ),
         labels=[
