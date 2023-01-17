@@ -115,7 +115,6 @@ class PrefixUploader:
             )
         else:
             access = cm.OciAccess(
-                cm.AccessType.OCI_REGISTRY,
                 imageReference=tgt_ref,
             )
 
