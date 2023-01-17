@@ -52,7 +52,6 @@ def test_labels_with_migration_hint_adds_original_ref_if_not_present():
         version='1.0.0',
         type=cm.ResourceType.OCI_IMAGE,
         access=cm.OciAccess(
-            cm.AccessType.OCI_REGISTRY,
             imageReference='target-repo.com/my-image:1.0.0',
         ),
         labels=[
