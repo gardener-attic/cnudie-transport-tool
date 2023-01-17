@@ -17,7 +17,6 @@ def img(name='image_name', version='1.2.3', ref='image_ref:1.2.3'):
             version=version,
             type=cm.ResourceType.OCI_IMAGE,
             access=cm.OciAccess(
-                cm.AccessType.OCI_REGISTRY,
                 imageReference=ref,
             )
         )
