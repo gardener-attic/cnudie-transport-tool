@@ -171,7 +171,6 @@ class TagSuffixUploader:
         processing_job.processed_resource = dataclasses.replace(
             processing_job.resource,
             access=cm.OciAccess(
-                cm.AccessType.OCI_REGISTRY,
                 imageReference=tgt_ref,
             ),
             labels=labels_with_migration_hint(
@@ -225,7 +224,6 @@ class RBSCCustomerFacingRepoLoader:
         processing_job.processed_resource = dataclasses.replace(
             processing_job.resource,
             access=cm.OciAccess(
-                cm.AccessType.OCI_REGISTRY,
                 imageReference=tgt_ref,
             ),
             labels=labels_with_migration_hint(
