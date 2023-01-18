@@ -9,7 +9,7 @@ docker run --env CC_CONFIG_DIR=/cc-config-slim -v /Users/i500806/dev/cc-config-s
 ```
 
 ## run script outside of docker
-- install Python 3.9
+- install Python 3.10
 - checkout repos to local machine
   - https://github.com/gardener/cnudie-transport-tool
   - https://github.com/gardener/cc-utils
