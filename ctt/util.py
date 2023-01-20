@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import dataclasses
+import datetime
 import enum
 import json
 import requests
@@ -33,6 +34,8 @@ class EnumJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, enum.Enum):
             return o.value
+        elif isinstance(o, datetime.datetime):
+            return o.isoformat()
         return super().default(o)
 
 
