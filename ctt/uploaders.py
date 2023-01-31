@@ -110,7 +110,6 @@ class PrefixUploader:
             # don't use artifact_path as self._prefix can also contain path elements
             relative_artifact_path = '/'.join(tgt_ref.split("/")[1:])
             access = cm.RelativeOciAccess(
-                cm.AccessType.RELATIVE_OCI_REFERENCE,
                 reference=relative_artifact_path
             )
         else:

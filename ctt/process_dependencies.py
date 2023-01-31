@@ -401,7 +401,6 @@ def access_resource_via_digest(res: cm.Resource, docker_content_digest: str) -> 
         updated_labels = labels_with_original_tag(res, res.access.reference)
         digest_ref = set_digest(res.access.reference, docker_content_digest)
         digest_access = cm.RelativeOciAccess(
-            cm.AccessType.RELATIVE_OCI_REFERENCE,
             reference=digest_ref
         )
     else:
