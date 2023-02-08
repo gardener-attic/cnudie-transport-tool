@@ -342,6 +342,7 @@ def process_upload_request(
     src_ref = upload_request.source_ref
 
     logger.info(f'start processing {src_ref} -> {tgt_ref=}')
+    logger.info(f'{tgt_ref=} {upload_request.remove_files=} {replication_mode=} {platform_filter=}')
 
     _, _, raw_manifest = container.util.filter_image(
         source_ref=src_ref,
@@ -349,6 +350,7 @@ def process_upload_request(
         remove_files=upload_request.remove_files,
         mode=replication_mode,
         platform_filter=platform_filter,
+        oci_client=oci_client,
     )
 
     logger.info(f'finished processing {src_ref} -> {tgt_ref=}')
