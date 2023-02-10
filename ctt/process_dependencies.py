@@ -437,7 +437,7 @@ def process_images(
     bom_resources: typing.Sequence[BOMEntry] = [],
     component_descriptor_lookup: cnudie.retrieve.ComponentDescriptorLookupById = None,
     skip_component_upload: typing.Callable[[cm.Component], bool] = None,
-    oci_client: oci.client.Client=None,
+    oci_client: oci.client.Client = None,
 ):
     if not oci_client:
         oci_client = ccc.oci.oci_client()
