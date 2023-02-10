@@ -13,7 +13,6 @@ import json
 import jsonschema
 import logging
 import os
-import pprint
 import typing
 import threading
 
@@ -298,7 +297,7 @@ def process_upload_request(
     upload_mode_images=product.v2.UploadMode.SKIP,
     replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
     platform_filter: typing.Callable[[om.OciPlatform], bool] = None,
-    oci_client: oci.client.Client=None,
+    oci_client: oci.client.Client = None,
 ) -> str:
     global uploaded_image_refs_to_digests
     global uploaded_image_refs_to_ready_events
