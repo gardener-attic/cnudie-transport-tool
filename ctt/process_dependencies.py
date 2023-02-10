@@ -298,10 +298,14 @@ def process_upload_request(
     upload_mode_images=product.v2.UploadMode.SKIP,
     replication_mode=oci.ReplicationMode.PREFER_MULTIARCH,
     platform_filter: typing.Callable[[om.OciPlatform], bool] = None,
+    oci_client: oci.client.Client=None,
 ) -> str:
     global uploaded_image_refs_to_digests
     global uploaded_image_refs_to_ready_events
     global upload_image_lock
+
+    if not oci_client:
+        oci_client = ccc.oci.oci_client()
 
     tgt_ref = upload_request.target_ref
 
@@ -326,7 +330,6 @@ def process_upload_request(
     # other threads waiting for upload result that result is ready be setting the event
 
     accept = replication_mode.accept_header()
-    oci_client = ccc.oci.oci_client()
     manifest_blob_ref = oci_client.head_manifest(
         image_reference=tgt_ref,
         absent_ok=True,
@@ -434,8 +437,10 @@ def process_images(
     bom_resources: typing.Sequence[BOMEntry] = [],
     component_descriptor_lookup: cnudie.retrieve.ComponentDescriptorLookupById = None,
     skip_component_upload: typing.Callable[[cm.Component], bool] = None,
+    oci_client: oci.client.Client=None,
 ):
-    logger.info(pprint.pformat(locals()))
+    if not oci_client:
+        oci_client = ccc.oci.oci_client()
 
     if processing_mode is ProcessingMode.DRY_RUN:
         ci.util.warning('dry-run: not downloading or uploading any images')
@@ -471,6 +476,7 @@ def process_images(
                 upload_mode_images=upload_mode_images,
                 replication_mode=replication_mode,
                 platform_filter=platform_filter,
+                oci_client=oci_client,
             )
 
             if not docker_content_digest:
@@ -498,7 +504,6 @@ def process_images(
                 # accept header should not be needed here as we are referencing the manifest via digest.
                 # but set just for safety reasons.
                 accept = replication_mode.accept_header()
-                oci_client = ccc.oci.oci_client()
                 manifest_blob_ref = oci_client.head_manifest(
                     image_reference=cosign_sig_ref,
                     absent_ok=True,
