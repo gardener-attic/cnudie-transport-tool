@@ -1,13 +1,5 @@
 # Cnudie Transport Tool
 
-## build & run docker container
-```
-docker build -t cnudie-transport-tool
-docker run cnudie-transport-tool python3 /cnudie-transport-tool/ctt.py --help
-
-docker run --env CC_CONFIG_DIR=/cc-config-slim -v /Users/i500806/dev/cc-config-slim:/cc-config-slim -v $(pwd)/.vscode/test-cd.yaml:/test-cd.yaml  -v $(pwd)/.vscode/processing.cfg:/processing.cfg cnudie-transport-tool:0.0.1 python3 /cnudie-transport-tool/ctt.py --tgt-ctx-repo-url <target context repo url> --component-descriptor /test-cd.yaml --processing-config /processing.cfg
-```
-
 ## run script outside of docker
 - install Python 3.10
 - checkout repos to local machine
