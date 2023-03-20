@@ -137,8 +137,8 @@ def main():
 
     platform_filter = None
     if parsed.included_platforms:
-        platform_filter = platform.PlatformFilter.create(
-            included_platforms=parsed.included_platforms,
+        platform_filter = platform.PlatformFilter(
+            included_platform_regexes=parsed.included_platforms,
         )
 
     if parsed.rbsc_git_url and not parsed.rbsc_git_branch:

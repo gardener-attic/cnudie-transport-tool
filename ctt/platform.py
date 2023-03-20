@@ -5,26 +5,41 @@
 import re
 import typing
 
+import deprecated
+
 import oci.model as om
 
 
 class PlatformFilter:
+    def __init__(
+        self,
+        included_platform_regexes: typing.Iterable[str],
+    ):
+        '''
+        @param included_platforms: regexes to filter for platforms in format os/arch/variant
+        '''
+        self.included_platform_regexes = tuple(included_platform_regexes)
+
+    def __call__(self, platform: om.OciPlatform) -> bool:
+        '''
+        returns True if the passed platform matches this filter (i.e. should be inclued), else False
+        '''
+        normalised_platform = normalise(platform)
+        for platform_regex in self.included_platform_regexes:
+            if re.fullmatch(platform_regex, normalised_platform):
+                return True
+
+        return False
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.included_platform_regexes=})'
+
+    @deprecated.deprecated
     @staticmethod
     def create(
         included_platforms: typing.List[str],
     ) -> typing.Callable[[om.OciPlatform], bool]:
-        '''
-        @param included_platforms: a list of regexes to filter for platforms in format os/arch/variant
-        '''
-        def filter(platform_to_match: om.OciPlatform) -> bool:
-            normalised_platform = normalise(platform_to_match)
-            for regex_platform in included_platforms:
-                if re.fullmatch(regex_platform, normalised_platform):
-                    return True
-
-            return False
-
-        return filter
+        return PlatformFilter(included_platform_regexes=included_platforms)
 
 
 def normalise(p: om.OciPlatform):

@@ -19,10 +19,10 @@ import ctt.platform as platform
 
 
 def test_platform_filter():
-    filter_func = platform.PlatformFilter.create(
-        included_platforms=[
+    filter_func = platform.PlatformFilter(
+        included_platform_regexes=(
             'linux/.*',
-        ],
+        ),
     )
 
     matches = filter_func(om.OciPlatform(
@@ -44,10 +44,10 @@ def test_platform_filter():
     ))
     assert matches is False
 
-    filter_func = platform.PlatformFilter.create(
-        included_platforms=[
+    filter_func = platform.PlatformFilter(
+        included_platform_regexes=(
             'linux/arm64',
-        ],
+        ),
     )
 
     matches = filter_func(om.OciPlatform(
@@ -69,10 +69,10 @@ def test_platform_filter():
     ))
     assert matches is False
 
-    filter_func = platform.PlatformFilter.create(
-        included_platforms=[
+    filter_func = platform.PlatformFilter(
+        included_platform_regexes=(
             'linux/arm64/v7',
-        ],
+        ),
     )
 
     matches = filter_func(om.OciPlatform(
@@ -89,10 +89,10 @@ def test_platform_filter():
     ))
     assert matches is False
 
-    filter_func = platform.PlatformFilter.create(
-        included_platforms=[
+    filter_func = platform.PlatformFilter(
+        included_platform_regexes=(
             '.*/arm64/.*',
-        ],
+        ),
     )
 
     matches = filter_func(om.OciPlatform(
