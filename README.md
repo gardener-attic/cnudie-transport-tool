@@ -1,5 +1,10 @@
 # Cnudie Transport Tool
 
+## Deprecation Notice
+Version `0.140.0` will be the final standalone version of CTT. The code has been integrated into https://github.com/gardener/cc-utils and further development will continue there.
+
+Migration to the new code can be done by installing the previously depended-upon `gardener-cicd-libs` (at least `1.2025.0`). Since the structure of the code was unchanged by the move, no further adjustment to the code using CTT-functionality should be necessary.
+
 ## run script outside of docker
 - install Python 3.10
 - checkout repos to local machine
